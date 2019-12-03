@@ -2,6 +2,7 @@ library(edgeR)
 library(ggplot2)
 library(biomaRt)
 library(ggrepel)
+library(fgsea)
 
 
 extract_info_from_name <- function(x, uRNA_pattern, name_pattern, columns, group_pattern) {
@@ -86,9 +87,9 @@ plot_lib_sizes <- function(data) {
 
 
 plot_mds <- function(data, group, dim.plot = c(1, 2)) {
-  data <- plotMDS(data, plot = FALSE, dim.plot = dim.plot)
-  data <- data.frame(x = data$x, y = data$y, group = group)
-  return(ggplot(data, aes(x = x, y = y, col = group)) + geom_point())
+    data <- plotMDS(data, plot = FALSE, dim.plot = dim.plot)
+    data <- data.frame(x = data$x, y = data$y, group = group)
+    return(ggplot(data, aes(x = x, y = y, col = group)) + geom_point())
 }
 
 
@@ -97,16 +98,16 @@ get_anno <- function(counts) {
                        dataset = "mmusculus_gene_ensembl",
                        mirror = "uswest") # options: useast, uswest, asia
 
-    anno <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name'),
+    anno <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name', 'entrezgene_id'),
                   filters = 'ensembl_gene_id',
-                  values= rownames(counts),
+                  values = rownames(counts),
                   mart = mart)
     return(anno)
 }
 
-run_pca <- function(data, anno, design = NULL, samples = NULL) {
+run_pca <- function(data, anno, design = NULL, samples = NULL, group_column = "group") {
     if (!is.null(samples)) {
-        dge <- DGEList(data, group = samples$group)
+        dge <- DGEList(data, group = samples[[group_column]])
     } else {
         dge <- DGEList(data)
     }
@@ -121,7 +122,9 @@ run_pca <- function(data, anno, design = NULL, samples = NULL) {
     dge.pca <- prcomp(cpm(dge, log = TRUE), center = TRUE, scale = TRUE)
 
     df <- data.frame(dge.pca$rotation[, 1:2])
-    df$group <- samples$group[match(rownames(df), samples$sample_name)]
+    df$group <- samples[[group_column]][match(rownames(df), samples$sample_name)]
+
+    # TODO redo
     df <- cbind(
         df,
         t(data.frame(lapply(strsplit(as.character(
@@ -137,7 +140,7 @@ run_pca <- function(data, anno, design = NULL, samples = NULL) {
     #eig.fig <- fviz_eig(dge.pca, main = "PC variance explained")
     return(list(
         dge = dge,
-        mds.fig = plot_mds(dge, samples$group),
+        mds.fig = plot_mds(dge, samples[[group_column]]),
         pca = dge.pca,
         pca.fig = pca.fig
         #eig.fig = eig.fig
@@ -145,13 +148,15 @@ run_pca <- function(data, anno, design = NULL, samples = NULL) {
 }
 
 
-subset_experiment <- function(samples, counts, exclude = c()) {
+subset_experiment <- function(samples, counts, exclude = c(), group_column = "group") {
+    group <- samples[[group_column]]
     columns <- as.character(
-        samples$sample_name[samples$group != "Uni RNA" & !(samples$sample_id %in% exclude)]
+        samples$sample_name[group != "Uni RNA" & !(samples$sample_id %in% exclude)]
     )
     samples <- samples[samples$sample_name %in% columns, ]
-    design <- model.matrix(~0 + samples$group)
-    colnames(design) <- levels(samples$group)
+    group <- samples[[group_column]]
+    design <- model.matrix(~0 + group)
+    colnames(design) <- levels(group)
     design <- design[, colnames(design)[colSums(design) > 0]]
     rownames(design) <- samples$sample_name
     return(list(
@@ -165,7 +170,7 @@ subset_experiment <- function(samples, counts, exclude = c()) {
 plot_gene <- function(data.obj, data.samples, gene.anno, gene) {
     gene.id <- gene.anno$ensembl_gene_id[gene.anno$external_gene_name == gene]
     df <- data.frame(group=data.samples$group)
-    rownames(df) <- data.samples$sample_name
+    rownames(df) <- data.samples$sample_id
     df[[gene]] <- data.obj$dge$counts[gene.id, ]
     return(ggplot(df, aes_string(x = "group", y = gene)) +
         theme_minimal() +
@@ -178,4 +183,197 @@ plot_gene <- function(data.obj, data.samples, gene.anno, gene) {
             size = 3
         )
     )
+}
+
+
+create_ma_plot <- function(genes) {
+    genes$significance <- rep("Not significant", length.out = nrow(genes))
+    genes$significance[genes$FDR < .05] <- "FDR < 0.05"
+    plot <- ggplot(genes, aes(x = logCPM, y = logFC), size = 6) +
+        geom_point(aes(colour = significance), alpha = .5) +
+        scale_color_manual(
+            values = c("#6194BC", "gray39"),
+            labels = c(
+                paste0('FDR < 0.05 (', sum(genes$FDR < .05), ')'), 
+                paste0('Not significant (', sum(genes$FDR >= .05), ')')
+            )
+        ) +
+        theme(
+            legend.position = c(0.9, 0.9),
+            legend.title=element_blank()
+        )
+    return(plot)
+}
+
+
+create_vol_plot <- function(genes, up, down, up.name = "", highlight.genes) {
+    up <- up[up$FDR < .05, ]
+    down <- down[down$FDR < .05, ]
+
+    # grob <- grobTree(textGrob(
+    #   paste0("Down: ", nrow(down), "\n", "Up: ", nrow(up)), 
+    #   x=0,  
+    #   y=0.95, 
+    #   hjust=-0.1,
+    #   vjust = 1,
+    #   gp = gpar(fontface = "italic", fontsize = 16)
+    # ))
+
+    #genes$gene <- rownames(genes)
+    upregs <- genes$FDR < .05 & genes$logFC > 0
+    downregs <- genes$FDR < .05 & genes$logFC < 0
+    up.legend <- paste0("Up in ", up.name, " (", sum(upregs), ")")
+    down.legend <- paste0("Down in ", up.name, " (", sum(downregs), ")")
+
+    genes$significance <- "Not significant"
+    genes$significance[upregs] <- up.legend
+    genes$significance[downregs] <- down.legend
+    genes$significance <- factor(
+        genes$significance,
+        levels = c(
+            "Not significant", 
+            down.legend, 
+            up.legend
+        )
+    )
+
+    if (length(highlight.genes) > 0) {
+        top.genes <- genes[genes$external_gene_name %in% highlight.genes, ]
+    } else {
+        top.genes <- data.frame(rbind(
+            genes[rownames(up)[1:10], ],
+            genes[rownames(down)[1:10], ]
+        ))
+    }
+
+    plot <- ggplot(genes, aes(x = logFC, y = -log10(FDR)), size = 6) +
+        geom_point(
+            aes(color = significance), 
+            alpha = .6, 
+            shape = 20,
+            size = 3
+        ) +
+        theme_minimal() + 
+        scale_color_manual(
+            values = c("#ddccbb", "#306090", "#961e2e"),
+            labels = c(
+                paste0("Not significant (", sum(genes$significance == "Not significant"), ")"), 
+                down.legend, 
+                up.legend
+            )
+        ) +
+        theme(
+            legend.position = "top",
+            legend.text = element_text(size = 10),
+            legend.title = element_blank(),
+            plot.title = element_text(size = 16)
+        ) + 
+        geom_text_repel(
+            data = top.genes,
+            aes(label = external_gene_name),
+            size = 5,
+            box.padding = unit(0.5, "lines"),
+            point.padding = unit(0.1, "lines")
+        )
+    return(plot)
+}
+
+
+compute_de_genes <- function(dge, design, contrast, highlight.genes) {
+    up.name <- rownames(contrast)[contrast > 0]
+    fit <- glmFit(dge, design)
+    genes <- glmLRT(fit, contrast = contrast)
+    # TODO: explore
+    # genes <- glmTreat(fit, contrast = contrast)#, lfc = log2(1.5))
+    most.de <- topTags(genes, n = nrow(genes$table))
+    upreg <- most.de$table[most.de$table$logFC > 0, ]
+    upreg <- upreg[order(upreg$logFC, decreasing = TRUE), ]
+    downreg <- most.de$table[most.de$table$logFC < 0, ]
+    downreg <- downreg[order(downreg$logFC), ]
+
+    return(list(
+        de = genes,
+        genes = most.de$table,
+        up = upreg, 
+        down = downreg, 
+        vol.plot = create_vol_plot(
+            most.de$table, 
+            upreg, 
+            downreg, 
+            up.name = up.name, 
+            highlight.genes
+        ),
+        ma.plot = create_ma_plot(most.de$table)
+    ))
+}
+
+
+run_de <- function(obj, design, contrast, name, title, highlight.genes = c()) {
+    dir.create(name, showWarnings = FALSE)
+    de.obj <- compute_de_genes(obj$dge, design, contrast, highlight.genes)
+
+    pdf(paste(name, paste0(name, "-volcano.pdf"), sep = "/"), width = 9, height = 6)
+    plot(de.obj$vol.plot + ggtitle(title))
+    dev.off()
+
+    fdr.genes <- de.obj$genes[de.obj$genes$FDR < .05, ]
+    fdr.genes <- fdr.genes[order(fdr.genes$logFC, decreasing = TRUE), ]
+    write.csv(fdr.genes, paste(name, paste0(name, "-list.csv"), sep = "/"))
+
+    write.table(
+        fdr.genes$external_gene_name[fdr.genes$logFC > 0], 
+        paste(name, paste0(name, "-up-genes.txt"), sep = "/"), 
+        row.names = FALSE, 
+        col.names = FALSE, 
+        quote = FALSE
+    )
+
+    write.table(
+        fdr.genes$external_gene_name[fdr.genes$logFC < 0], 
+        paste(name, paste0(name, "-down-genes.txt"), sep = "/"), 
+        row.names = FALSE, 
+        col.names = FALSE, 
+        quote = FALSE
+    )
+
+    # entrez <- mapIds(
+    #   org.Mm.eg.db, 
+    #   keys = rownames(de.obj$de), 
+    #   keytype = "ENSEMBL", 
+    #   column = "ENTREZID"
+    # )
+    # entrez[is.na(entrez)] <- "NA"
+    # rownames(de.obj$de) <- make.unique(entrez)
+    # go <- goana(de.obj$de, species = "Mm")
+    # write.csv(
+    #   topGO(go, ontology = "BP", number = 50), 
+    #   paste(name, paste0(name, "-goana.csv"), sep = "/")
+    # )
+    return(de.obj)
+}
+
+
+run_enrichment <- function(contrast) {
+    isr.paths <- gmtPathways("../../docs/mouse-isr.gmt")
+    # isr.paths <- examplePathways
+    for (path in names(isr.paths)) {
+      isr.paths[[path]] <- unique(isr.paths[[path]])
+    }
+    ranks <- contrast$genes[order(contrast$genes$LR), "LR", drop = FALSE]
+    rranks <- unlist(ranks)
+    names(rranks) <- rownames(ranks)
+    # names(rranks) <- as.character(gene.anno$entrezgene_id[match(rownames(ranks), gene.anno$ensembl_gene_id)])
+    rranks <- rranks[!is.na(names(rranks))]
+    result <- fgsea(
+        pathways = isr.paths,
+        stats = rranks,
+        nperm = 10000
+    )
+    pval <- result[result$pathway == "isr-mouse-extended", "padj"]
+    plot <- plotEnrichment(isr.paths$`isr-mouse-extended`, rranks) + 
+        ggtitle(paste0("ISR extended from Calico, padj=", pval))
+    return(list(
+        table = result,
+        plot = plot
+    ))
 }
