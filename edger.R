@@ -107,7 +107,7 @@ plot_lib_sizes <- function(data) {
 get_anno <- function(counts) {
     mart <- useEnsembl(biomart = "ensembl",
                        dataset = "mmusculus_gene_ensembl",
-                       mirror = "uswest") # options: useast, uswest, asia
+                       mirror = "useast") # options: useast, uswest, asia
 
     anno <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name', 'entrezgene_id'),
                   filters = 'ensembl_gene_id',
@@ -175,6 +175,53 @@ add_pca <- function(exp, top = 500) {
 }
 
 
+add_kmeans <- function(exp, clusters) {
+    set.seed(42)
+
+    contrasts <- c()
+    group_names <- colnames(exp$design)
+    first_group = group_names[1]
+    for (col in group_names[2:length(group_names)]) {
+        contrasts <- c(
+            contrasts,
+            sprintf("%s-%s", first_group, col)
+        )
+    }
+    contrasts <- makeContrasts(contrasts = contrasts, levels = exp$design)
+
+    fit <- glmFit(exp$dge, design = exp$design)
+    res <- glmLRT(fit, contrast = contrasts)
+    most.de <- topTags(res, n = nrow(res$table))
+    sign <- rownames(most.de$table)[most.de$table$FDR < .05]
+
+    sign.data <- cpm(exp$dge, log = TRUE)[sign, ]
+    sign.data <- t(scale(t(sign.data)))
+    sign.data <- sign.data[!is.na(sign.data[, 1]) & !is.na(rownames(sign.data)), ]
+    z <- kmeans(sign.data, clusters, nstart = 500, iter.max = 50)
+    sign.data <- sign.data[names(sort(z$cluster)), ]
+
+    gene_table <- NULL
+    for (i in sort(unique(z$cluster))) {
+        cl <- most.de$table[names(z$cluster[z$cluster == i]),]
+        cl$cluster <- i
+        cl <- cl[order(cl$FDR), c("external_gene_name", "cluster", "logCPM", "LR", "FDR")]
+        if (is.null(gene_table)) {
+            gene_table <- cl
+        } else {
+            gene_table <- rbind(gene_table, cl)
+        }
+    }
+
+    exp$kmeans_degs <- most.de$table
+    exp$kmeans_data <- sign.data
+    exp$kmeans_cluster <- z$cluster
+    exp$kmeans_dist <- dist.cosine(t(exp$kmeans_data))
+    exp$kmeans_genes <- gene_table
+
+    return(exp)
+}
+
+
 plot_mds <- function(exp, dims = 1:2, label = FALSE) {
     data <- plotMDS(exp$dge, plot = FALSE, dim.plot = dims)
     data <- data.frame(
@@ -234,7 +281,7 @@ plot_gene <- function(data.obj, data.samples, gene.anno, gene) {
     df <- data.frame(group=data.samples$group)
     rownames(df) <- data.samples$sample_id
     df[[gene]] <- data.obj$dge$counts[gene.id, ]
-    return(ggplot(df, aes_string(x = "group", y = gene)) +
+    return(ggplot(df, aes_string(x = "group", y = sprintf("`%s`", gene))) +
         theme_minimal() +
         geom_boxplot() +
         geom_dotplot(binaxis = 'y', stackdir = 'center') +
@@ -341,12 +388,14 @@ create_vol_plot <- function(genes, up, down, up.name = "", highlight.genes) {
 }
 
 
-compute_de_genes <- function(exp, contrast, highlight.genes) {
+compute_de_genes <- function(exp, contrast, highlight.genes, lfc = 0) {
     up.name <- rownames(contrast)[contrast > 0]
     fit <- glmFit(exp$dge, exp$design)
-    genes <- glmLRT(fit, contrast = contrast)
-    # TODO: explore
-    # genes <- glmTreat(fit, contrast = contrast)#, lfc = log2(1.5))
+    if (lfc > 0) {
+        genes <- glmTreat(fit, contrast = contrast, lfc = lfc)
+    } else {
+        genes <- glmLRT(fit, contrast = contrast)
+    }
     most.de <- topTags(genes, n = nrow(genes$table))
     upreg <- most.de$table[most.de$table$logFC > 0, ]
     upreg <- upreg[order(upreg$logFC, decreasing = TRUE), ]
@@ -370,13 +419,18 @@ compute_de_genes <- function(exp, contrast, highlight.genes) {
 }
 
 
-run_de <- function(exp, contrast, name, title, highlight.genes = c()) {
+run_de <- function(exp, contrast, name, title, highlight.genes = c(), lfc = 0) {
     dir.create(name, showWarnings = FALSE)
-    de.obj <- compute_de_genes(exp, contrast, highlight.genes)
+    de.obj <- compute_de_genes(exp, contrast, highlight.genes, lfc)
 
     pdf(paste(name, paste0(name, "-volcano.pdf"), sep = "/"), width = 9, height = 6)
     plot(de.obj$vol.plot + ggtitle(title))
     dev.off()
+
+    write.csv(
+        de.obj$genes[order(de.obj$genes$logFC, decreasing = TRUE), ],
+        paste(name, paste0(name, "-list-full.csv"), sep = "/")
+    )
 
     fdr.genes <- de.obj$genes[de.obj$genes$FDR < .05, ]
     fdr.genes <- fdr.genes[order(fdr.genes$logFC, decreasing = TRUE), ]
@@ -393,6 +447,14 @@ run_de <- function(exp, contrast, name, title, highlight.genes = c()) {
     write.table(
         na.omit(fdr.genes$external_gene_name[fdr.genes$logFC < 0]),
         paste(name, paste0(name, "-down-genes.txt"), sep = "/"),
+        row.names = FALSE,
+        col.names = FALSE,
+        quote = FALSE
+    )
+
+    write.table(
+        na.omit(de.obj$genes$external_gene_name),
+        paste(name, "background.txt", sep = "/"),
         row.names = FALSE,
         col.names = FALSE,
         quote = FALSE
@@ -421,21 +483,54 @@ run_enrichment <- function(contrast) {
     for (path in names(isr.paths)) {
       isr.paths[[path]] <- unique(isr.paths[[path]])
     }
-    ranks <- contrast$genes[order(contrast$genes$LR), "LR", drop = FALSE]
-    rranks <- unlist(ranks)
-    names(rranks) <- rownames(ranks)
-    # names(rranks) <- as.character(gene.anno$entrezgene_id[match(rownames(ranks), gene.anno$ensembl_gene_id)])
-    rranks <- rranks[!is.na(names(rranks))]
-    result <- fgsea(
-        pathways = isr.paths,
-        stats = rranks,
-        nperm = 10000
+    ups <- contrast$genes[contrast$genes$logFC > 0, ]
+    downs <- contrast$genes[contrast$genes$logFC < 0,]
+    all <- list(up = ups, down = downs)
+
+    result <- list()
+    for (dir in names(all)) {
+        genes <- all[[dir]]
+        ranks <- genes[order(genes$LR), "LR", drop = FALSE]
+        rranks <- unlist(ranks)
+        names(rranks) <- rownames(ranks)
+        # names(rranks) <- as.character(gene.anno$entrezgene_id[match(rownames(ranks), gene.anno$ensembl_gene_id)])
+        rranks <- rranks[!is.na(names(rranks))]
+        enr <- fgsea(
+            pathways = isr.paths,
+            stats = rranks,
+            nperm = 10000
+        )
+        pval <- enr[enr$pathway == "isr-mouse-extended", "padj"]
+        plot <- plotEnrichment(isr.paths$`isr-mouse-extended`, rranks) +
+            ggtitle(paste0("ISR extended from Calico, padj=", pval))
+        result[[paste0(dir, "_table")]] <- enr
+        result[[paste0(dir, "_plot")]] <- plot
+    }
+
+    return(result)
+}
+
+
+plot_kmeans <- function(exp, groups, colnames = NULL) {
+    data <- exp$kmeans_data
+    if (!is.null(colnames)) {
+        colnames(data) <- colnames
+    }
+
+    clusters <- length(unique(exp$kmeans_cluster))
+    mycol <- colorpanel(1000, "blue", "white", "red")
+    df <- data.frame(group = factor(exp$kmeans_cluster))
+    rownames(df) <- names(exp$kmeans_cluster)
+    qq <- pheatmap(
+        data,
+        col = mycol,
+        cluster_rows = FALSE,
+        annotation_row = df,
+        show_rownames = FALSE,
+        gaps_row = cumsum(table(sort(exp$kmeans_cluster)))[1:clusters],
+        cutree_cols = groups,
+        clustering_distance_cols = exp$kmeans_dist,
+        clustering_method = "ward.D"
     )
-    pval <- result[result$pathway == "isr-mouse-extended", "padj"]
-    plot <- plotEnrichment(isr.paths$`isr-mouse-extended`, rranks) +
-        ggtitle(paste0("ISR extended from Calico, padj=", pval))
-    return(list(
-        table = result,
-        plot = plot
-    ))
+    return(qq)
 }
