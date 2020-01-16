@@ -3,6 +3,9 @@ library(ggplot2)
 library(biomaRt)
 library(ggrepel)
 library(fgsea)
+library(stylo)
+library(gplots)
+library(pheatmap)
 
 
 ..OUT_DIR <- NULL
@@ -43,10 +46,14 @@ load_samples <- function(
     uRNA_pattern = "uRNA",
     name_pattern = NULL,
     columns = c(),
-    group_pattern = "S\\d\\d\\_(.+)\\_R\\d+"
+    group_pattern = "S\\d\\d\\_(.+)\\_R\\d+",
+    sample_id_from_name = FALSE
 ) {
     samples <- read.delim(samples_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE)[, 1:2]
     colnames(samples) <- c("sample_id", "sample_name")
+    if (sample_id_from_name) {
+        samples$sample_id <- substr(samples$sample_name, 1, 3)
+    }
     samples <- cbind(
         samples,
         t(as.data.frame(lapply(
@@ -530,7 +537,7 @@ plot_kmeans <- function(exp, groups, colnames = NULL) {
         gaps_row = cumsum(table(sort(exp$kmeans_cluster)))[1:clusters],
         cutree_cols = groups,
         clustering_distance_cols = exp$kmeans_dist,
-        clustering_method = "ward.D"
+        clustering_method = "ward.D2"
     )
     return(qq)
 }
