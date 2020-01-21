@@ -30,6 +30,8 @@ uniqueNames=($(echo "${sampleNames[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
 
 #now iterate through each base name, find all lanes, and merge to new directory
 #keeping RG tags
+
+mkdir -p "$outDir"
 for s in ${uniqueNames[@]}
 do
 	laneFiles=${s}*bam
