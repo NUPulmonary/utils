@@ -34,7 +34,7 @@ pretty_MA_plot = function(results_df,
                        all.y = F,
                        by.x = id_col,
                        by.y = "ensembl_gene_id")
-    name_col = "ensembl_gene_id"
+    name_col = "external_gene_name"
   }
   
   plt = ggplot(results_df, 
@@ -48,5 +48,5 @@ pretty_MA_plot = function(results_df,
     xlab("log10(Mean Expression)") +
     ylab("log2(Fold Change)")
   
-  print(plt)
+  suppressWarnings(print(plt))
 }
