@@ -82,7 +82,13 @@ load_counts <- function(file, samples = NULL) {
         counts <- counts[, -(1:5)]
     }
     if (!is.null(samples)) {
-        colnames(counts) <- samples$sample_name
+        if (base::all(colnames(counts) %in% samples$sample_name)
+            && ncol(counts) == nrow(samples))
+        {
+            counts <- counts[, samples$sample_name]
+        } else {
+            colnames(counts) <- samples$sample_name
+        }
     }
     return(counts)
 }
@@ -283,22 +289,28 @@ plot_pca <- function(exp, dims = 1:2, label = FALSE, pt.size = 1) {
 }
 
 
-plot_gene <- function(data.obj, data.samples, gene.anno, gene) {
+plot_gene <- function(data.obj, data.samples, gene.anno, gene, label=TRUE) {
     gene.id <- gene.anno$ensembl_gene_id[gene.anno$external_gene_name == gene]
     df <- data.frame(group=data.samples$group)
     rownames(df) <- data.samples$sample_id
-    df[[gene]] <- data.obj$dge$counts[gene.id, ]
-    return(ggplot(df, aes_string(x = "group", y = sprintf("`%s`", gene))) +
+    if (class(data.obj) == "data.frame") { # simple typing TODO: redo
+        df[[gene]] <- t(data.obj[gene.id, data.samples$sample_name])
+    } else {
+        df[[gene]] <- data.obj$dge$counts[gene.id, ]
+    }
+    plot <- ggplot(df, aes_string(x = "group", y = sprintf("`%s`", gene))) +
         theme_minimal() +
         geom_boxplot() +
-        geom_dotplot(binaxis = 'y', stackdir = 'center') +
-        geom_label_repel(
+        geom_dotplot(binaxis = 'y', stackdir = 'center')
+    if (label) {
+        plot <- plot + geom_label_repel(
             aes(label = rownames(df)),
             na.rm = TRUE,
             nudge_x = .3,
             size = 3
         )
-    )
+    }
+    return(plot)
 }
 
 
@@ -490,29 +502,29 @@ run_enrichment <- function(contrast) {
     for (path in names(isr.paths)) {
       isr.paths[[path]] <- unique(isr.paths[[path]])
     }
-    ups <- contrast$genes[contrast$genes$logFC > 0, ]
-    downs <- contrast$genes[contrast$genes$logFC < 0,]
-    all <- list(up = ups, down = downs)
+    #ups <- contrast$genes[contrast$genes$logFC > 0, ]
+    #downs <- contrast$genes[contrast$genes$logFC < 0,]
+    #all <- list(up = ups, down = downs)
 
     result <- list()
-    for (dir in names(all)) {
-        genes <- all[[dir]]
-        ranks <- genes[order(genes$LR), "LR", drop = FALSE]
-        rranks <- unlist(ranks)
-        names(rranks) <- rownames(ranks)
-        # names(rranks) <- as.character(gene.anno$entrezgene_id[match(rownames(ranks), gene.anno$ensembl_gene_id)])
-        rranks <- rranks[!is.na(names(rranks))]
-        enr <- fgsea(
-            pathways = isr.paths,
-            stats = rranks,
-            nperm = 10000
-        )
-        pval <- enr[enr$pathway == "isr-mouse-extended", "padj"]
-        plot <- plotEnrichment(isr.paths$`isr-mouse-extended`, rranks) +
-            ggtitle(paste0("ISR extended from Calico, padj=", pval))
-        result[[paste0(dir, "_table")]] <- enr
-        result[[paste0(dir, "_plot")]] <- plot
-    }
+    #for (dir in names(all)) {
+    genes <- contrast$genes
+    ranks <- genes[order(genes$logFC, decreasing = TRUE), "logFC", drop = FALSE]
+    rranks <- unlist(ranks)
+    names(rranks) <- rownames(ranks)
+    # names(rranks) <- as.character(gene.anno$entrezgene_id[match(rownames(ranks), gene.anno$ensembl_gene_id)])
+    rranks <- rranks[!is.na(names(rranks))]
+    enr <- fgsea(
+        pathways = isr.paths,
+        stats = rranks,
+        nperm = 10000
+    )
+    pval <- enr[enr$pathway == "isr-mouse-extended", "padj"]
+    plot <- plotEnrichment(isr.paths$`isr-mouse-extended`, rranks) +
+        ggtitle(paste0("ISR extended from Calico, padj=", pval))
+    result[["table"]] <- enr
+    result[["plot"]] <- plot
+    #}
 
     return(result)
 }
