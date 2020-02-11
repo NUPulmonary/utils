@@ -140,7 +140,7 @@ create_experiment <- function(samples,
     group <- samples[[group_column]]
     keep_idx <- !(samples$sample_id %in% exclude)
     if (remove_urna) {
-        keep_idx <- keep_idx & group != "Uni RNA"
+        keep_idx <- keep_idx & (group != "Uni RNA")
     }
     columns <- as.character(samples$sample_name[keep_idx])
     samples <- samples[samples$sample_name %in% columns, ]
