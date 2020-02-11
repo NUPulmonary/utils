@@ -117,9 +117,9 @@ plot_lib_sizes <- function(data) {
 }
 
 
-get_anno <- function(counts) {
+get_anno <- function(counts, organism = "mmusculus") {
     mart <- useEnsembl(biomart = "ensembl",
-                       dataset = "mmusculus_gene_ensembl",
+                       dataset = sprintf("%s_gene_ensembl", organism),
                        mirror = "useast") # options: useast, uswest, asia
 
     anno <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name', 'entrezgene_id'),
@@ -289,8 +289,29 @@ plot_pca <- function(exp, dims = 1:2, label = FALSE, pt.size = 1) {
 }
 
 
+plot_gene2 <- function(exp, gene, label=TRUE) { # TODO: add raw=TRUE for raw counts
+    gene.id <- exp$anno$ensembl_gene_id[exp$anno$external_gene_name == gene][1]
+    df <- data.frame(group = exp$samples[[exp$group_column]])
+    rownames(df) <- exp$samples$sample_id
+    df[[gene]] <- exp$dge$counts[gene.id, ]
+    plot <- ggplot(df, aes_string(x = "group", y = sprintf("`%s`", gene))) +
+        theme_minimal() +
+        geom_boxplot() +
+        geom_dotplot(binaxis = "y", stackdir = "center")
+    if (label) {
+        plot <- plot + geom_label_repel(
+            aes(label = rownames(df)),
+            na.rm = TRUE,
+            nudge_x = .3,
+            size = 3
+        )
+    }
+    return(plot)
+}
+
+
 plot_gene <- function(data.obj, data.samples, gene.anno, gene, label=TRUE) {
-    gene.id <- gene.anno$ensembl_gene_id[gene.anno$external_gene_name == gene]
+    gene.id <- gene.anno$ensembl_gene_id[gene.anno$external_gene_name == gene][1]
     df <- data.frame(group=data.samples$group)
     rownames(df) <- data.samples$sample_id
     if (class(data.obj) == "data.frame") { # simple typing TODO: redo
