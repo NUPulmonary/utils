@@ -50,7 +50,7 @@ construct_goi_matrix = function(dge,
   counts_mat = counts_mat[genes_of_interest, ]
   
   #z-score matrix (necessary for k means)
-  counts_mat = t(scale(t(counts_mat), )) #transpose issue is annoying
+  counts_mat = t(scale(t(counts_mat))) #transpose issue is annoying
   
   return(counts_mat)
 }
