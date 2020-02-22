@@ -109,6 +109,7 @@ k_means_figure = function(dge,
   require(RColorBrewer)
   require(topGO)
   require(GO.db)
+  require(DESeq2)
   
   counts_mat = construct_goi_matrix(dge = dge,
                                     qval_cutoff = qval_cutoff,
