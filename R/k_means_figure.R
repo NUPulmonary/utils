@@ -102,8 +102,7 @@ k_means_figure = function(dge,
                           max_go_terms = 5,
                           colnames = F,
                           legend_factors = NULL,
-                          go_annotations = "org.Mm.eg.db",
-                          mart_name = "mmusculus_gene_ensembl")
+                          go_annotations = "org.Mm.eg.db")
 {
   require(pheatmap)
   require(RColorBrewer)
@@ -179,20 +178,32 @@ k_means_figure = function(dge,
       #adjust p-values and take significant
       score$padj = p.adjust(score$pval, method = "fdr")
       score = subset(score, padj < 0.05)
-      score$description = NA
-      for(i in 1:nrow(score))
+      #in case of no significant go terms, return NULL
+      if(nrow(score) == 0)
       {
-        score$description[i] = GOTERM[[score$go_id[i]]]@Term
-      }
-      
-      #add descriptions
-      score$full_go = paste(score$go_id, score$description)
-      return(score)})
+        return(NULL)
+      } else
+      {
+        score$description = NA
+        for(i in 1:nrow(score))
+        {
+          score$description[i] = GOTERM[[score$go_id[i]]]@Term
+        }
+        
+        #add descriptions
+        score$full_go = paste(score$go_id, score$description)
+        return(score)
+       }})
       
     #annotate clusters using empty gene name slots
     cluster_annos = rep("", nrow(counts_mat))
     for(i in 1:length(cluster_GO))
     {
+      #skip empties
+      if(is.null(cluster_GO[[i]]))
+      {
+           next
+      }
       if(i == 1)
       {
         start = 1
