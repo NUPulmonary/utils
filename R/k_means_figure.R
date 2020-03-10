@@ -223,10 +223,20 @@ k_means_figure = function(dge,
       {
         n_go = nrow(cluster_GO[[i]])
       }
+      
+      #space based on size of cluster (fill just top half)
+      skip = max((nrow(cluster_GO[[i]]) / max_go_terms / 2), 75) #minimum of 75 for this font
       for(j in 1:n_go)
       {
-        cur_index = start + 100 * (j - 1)
-        cluster_annos[cur_index] = cluster_GO[[i]]$full_go[j]
+        cur_index = start + skip * (j - 1)
+        #skip term if we've filled the cluster space already
+        cluster_end = ifelse(i == length(cluster_GO),
+                             yes = nrow(counts_mat),
+                             no = breaks[i] - 1) #last cluster doesn't have a following start
+        if(cur_index <= cluster_end)
+        {
+          cluster_annos[cur_index] = cluster_GO[[i]]$full_go[j]
+        }
       }
     }
   }
