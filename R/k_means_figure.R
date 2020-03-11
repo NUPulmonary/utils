@@ -144,7 +144,7 @@ k_means_figure = function(dge,
   if(!is.null(legend_factors))
   {
     md = as.data.frame(colData(dge))
-    md = md[, legend_factors]
+    md = md[, legend_factors, drop = F]
   }
   
   #add GO terms, as necessary
