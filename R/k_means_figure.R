@@ -102,7 +102,8 @@ k_means_figure = function(dge,
                           max_go_terms = 5,
                           colnames = F,
                           legend_factors = NULL,
-                          go_annotations = "org.Mm.eg.db")
+                          go_annotations = "org.Mm.eg.db",
+                          ...)
 {
   require(pheatmap)
   require(RColorBrewer)
@@ -251,7 +252,8 @@ k_means_figure = function(dge,
                   fontsize_row = 6,
                   annotation_names_col = F,
                   color = colorRampPalette(rev(brewer.pal(n = 7, 
-                                                          name = "RdBu")))(100))
+                                                          name = "RdBu")))(100),
+                  ...)
   return(plot)
 }
   
