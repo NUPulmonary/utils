@@ -14,7 +14,8 @@ pretty_MA_plot = function(results,
                           id_col = "row.names",
                           mart_name = "mmusculus_gene_ensembl",
                           name_col = "row.names",
-                          lfc_threshold = 0)
+                          lfc_threshold = 0,
+                          genes = NULL)
 {
   require(ggplot2)
   require(ggrepel)
@@ -34,13 +35,23 @@ pretty_MA_plot = function(results,
   plt = ggplot(results, 
                aes(x = baseMean, y = log2FoldChange)) +
     geom_point(aes(color = padj < 0.05 & abs(log2FoldChange) >= lfc_threshold)) +
-    geom_label_repel(data = subset(results, padj < 0.05 & abs(log2FoldChange) >= lfc_threshold),
-                     aes_string(label = name_col)) +
     scale_x_log10(limits = c(1, NA)) +
-    scale_color_manual(values = c("grey50", "firebrick4")) +
+    scale_color_manual(values = c(alpha(colour = "grey50", alpha = 0.05), "firebrick4")) +
     theme(legend.position = "none") + 
     xlab("Mean Expression") +
     ylab("log2(Fold Change)")
+  
+  if(is.null(genes))
+  {
+    plt = plt + geom_label_repel(data = subset(results, padj < 0.05 & abs(log2FoldChange) >= lfc_threshold),
+                     aes_string(label = name_col))
+  } else
+  {
+    plt = plt + geom_label_repel(data = subset(results, external_gene_name %in% genes),
+                                 aes_string(label = name_col),
+                                 min.segment.length = 0.1)
+  }
+                                 
   
   suppressWarnings(print(plt))
 }   
