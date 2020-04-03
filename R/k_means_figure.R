@@ -103,6 +103,9 @@ k_means_figure = function(dge,
                           colnames = F,
                           legend_factors = NULL,
                           go_annotations = "org.Mm.eg.db",
+                          ensembl_db = "mmusculus_gene_ensembl",
+                          cluster_columns = T,
+                          return_genes = F,
                           ...)
 {
   require(pheatmap)
@@ -243,7 +246,7 @@ k_means_figure = function(dge,
   }
   plot = pheatmap(counts_mat, 
                   cluster_rows = F,
-                  cluster_cols = T,
+                  cluster_cols = cluster_columns,
                   clustering_method = "ward.D2",
                   gaps_row = breaks,
                   show_colnames = F,
@@ -254,7 +257,22 @@ k_means_figure = function(dge,
                   color = colorRampPalette(rev(brewer.pal(n = 7, 
                                                           name = "RdBu")))(100),
                   ...)
-  return(plot)
+  
+  if(return_genes)
+  {
+    require(biomaRt)
+    mart = useMart("ensembl", ensembl_db)
+    conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
+                 mart = mart)
+    kmeans_results = merge(x = kmeans_results, 
+                           y = conv,
+                           by.x = "gene",
+                           by.y = "ensembl_gene_id")
+    return(list("plot" = plot, "genes" = kmeans_results))
+  } else
+  {
+    return(plot)
+  }
 }
   
   
