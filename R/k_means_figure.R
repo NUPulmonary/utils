@@ -106,6 +106,7 @@ k_means_figure = function(dge,
                           ensembl_db = "mmusculus_gene_ensembl",
                           cluster_columns = T,
                           return_genes = F,
+                          go_fontsize = 6,
                           ...)
 {
   require(pheatmap)
@@ -252,7 +253,7 @@ k_means_figure = function(dge,
                   show_colnames = F,
                   annotation_col = md,
                   labels_row = cluster_annos,
-                  fontsize_row = 6,
+                  fontsize_row = go_fontsize,
                   annotation_names_col = F,
                   color = colorRampPalette(rev(brewer.pal(n = 7, 
                                                           name = "RdBu")))(100),
