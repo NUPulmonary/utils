@@ -4,13 +4,21 @@
 
 # currently supports only single-factor designs
   
-bulkDEA = function(object, metaData, design, splitCells = T, cellFactor, organism, geneVar, outDir, outPrefix, parallel = T)
+bulkDEA = function(object, #seurat object
+                   metaData, #metadata mapping samples to factors. Rownames are sample names.
+                   design, #design string for DESeq
+                   splitCells = T, #whether or not to split by cell type (or whatever)
+                   cellFactor = NULL, #name of the cell-type column
+                   organism, #in ensembl format, e.g. mmusculus
+                   geneVar, #type of gene ID used, in biomart format e.g. ensembl_gene_id
+                   outDir, #directory to output results
+                   outPrefix, #file prefix for results files
+                   cores = 1) #cores to run in parallel
 {
    require(Seurat)
    require(DESeq2)
    require(biomaRt)
    require(future)
-   cores = availableCores()
    library(BiocParallel)
    register(BPPARAM = MulticoreParam(cores))
    dateString = format(Sys.Date(), "%y%m%d")
@@ -22,11 +30,11 @@ bulkDEA = function(object, metaData, design, splitCells = T, cellFactor, organis
    
    #make mart for conversion
    mart = useMart("ensembl", paste0(organism, "_gene_ensembl"))
-   conv = getBM(attributes = c("ensembl_gene_id", "entrezgene", "external_gene_name"), mart = mart)
+   conv = getBM(attributes = c("ensembl_gene_id", "entrezgene_id", "external_gene_name"), mart = mart)
    
    # keep track of number of samples per condition
    completeMetadata = metaData
-   allSamples = sort(unique(substr(rownames(object@meta.data), 1, (regexpr("\\_\\_\\_", rownames(object@meta.data)) - 1))))
+   allSamples = sort(unique(substr(rownames(object@meta.data), 1, (regexpr("\\_[ATCG]", rownames(object@meta.data)) - 1))))
    sampleData = matrix(nrow = 0, ncol = (length(allSamples) + 1)) # keeps track of number of cells per condition
    sampleDataCols = c("cellType", paste0("Ncells_", allSamples))
    colnames(sampleData) = sampleDataCols
@@ -102,7 +110,7 @@ bulkDEA = function(object, metaData, design, splitCells = T, cellFactor, organis
       joinedMat = joinedMat[, match(rownames(metaData), colnames(joinedMat))]
       des = DESeqDataSetFromMatrix(countData = joinedMat, colData = metaData, design = design)
       saveRDS(des, paste(dateString, outPrefix, cell, "subset", "des.rds", sep = "_"))
-      dge = suppressWarnings(DESeq(des, parallel = parallel)) #get rid of annoying package stats warning
+      dge = DESeq(des, parallel = T)
       
       allFactors = sort(unique(as.character(metaData[, 1])), decreasing = T) # reverse order so we get older/younger for all comps
       allComps = combn(x = allFactors, m = 2, simplify = F) # every possible combination of ages; list of older, younger for each comp
@@ -117,13 +125,7 @@ bulkDEA = function(object, metaData, design, splitCells = T, cellFactor, organis
                                          yes = substr(res$ensembl_gene_id, 1, (regexpr("\\.", res$ensembl_gene_id) - 1)),
                                          no = res$ensembl_gene_id) #remove version numbers
          }
-         if(geneVar == "ensembl_gene_id")
-         {
-            res = merge(res, conv, all.x = T)
-         } else
-         {
-            res = merge(res, conv, by.x = "mgi_symbol", by.y = "external_gene_name", all.x = T)
-         }
+         res = merge(res, conv, all.x = T)
          
          compName = paste(comp[1], "vs", comp[2], sep = "_")
          write.csv(res, paste(dateString, outPrefix, cell, "subset", compName, "dge.csv", sep = "_"))
