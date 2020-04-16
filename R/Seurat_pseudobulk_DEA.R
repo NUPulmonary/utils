@@ -13,6 +13,7 @@ bulkDEA = function(object, #seurat object
                    geneVar, #type of gene ID used, in biomart format e.g. ensembl_gene_id
                    outDir, #directory to output results
                    outPrefix, #file prefix for results files
+                   minCells = 50, #whether or not to override the minimum number of cells/samples
                    cores = 1) #cores to run in parallel
 {
    require(Seurat)
@@ -34,7 +35,7 @@ bulkDEA = function(object, #seurat object
    
    # keep track of number of samples per condition
    completeMetadata = metaData
-   allSamples = sort(unique(substr(rownames(object@meta.data), 1, (regexpr("\\_[ATCG]", rownames(object@meta.data)) - 1))))
+   allSamples = sort(unique(substr(rownames(object@meta.data), 1, (regexpr("\\_+[ATCG]", rownames(object@meta.data)) - 1))))
    sampleData = matrix(nrow = 0, ncol = (length(allSamples) + 1)) # keeps track of number of cells per condition
    sampleDataCols = c("cellType", paste0("Ncells_", allSamples))
    colnames(sampleData) = sampleDataCols
@@ -63,7 +64,7 @@ bulkDEA = function(object, #seurat object
       {
             sd = c(sd, sum(grepl(sample, colnames(cellSub))))
       }
-      samples = allSamples[as.numeric(sd[2:length(sd)]) > 50] # need at least 50 cells to get a real picture
+      samples = allSamples[as.numeric(sd[2:length(sd)]) >= minCells] # need at least 50 cells to get a real picture
       sampleData$cellType = as.character(sampleData$cellType)
       sampleData = rbind(sampleData, sd)
       colnames(sampleData) = sampleDataCols #necessary on first pass (but harmless afterward)
