@@ -1,5 +1,5 @@
 clean_sample_sheet = function(original, #path to original "raw" RNA info excel sheet
-                              output_file, #output path
+                              output_file = NA, #output path
                               sheet = "Basespace", #sheet name with template
                               investigator,
                               application = "NextSeq FASTQ Only", # what workflow to run
@@ -80,6 +80,10 @@ clean_sample_sheet = function(original, #path to original "raw" RNA info excel s
   header = rbind(header, data)
 
   #export
+  if(is.na(output_file)) #by default, just place in main directory
+  {
+    output_file = paste0(dirname(original), "/SampleSheet.csv")
+  }
   write.table(x = header, 
               file = output_file,
               quote = F,
