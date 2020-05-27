@@ -289,9 +289,12 @@ plot_pca <- function(exp, dims = 1:2, label = FALSE, pt.size = 1) {
 }
 
 
-plot_gene2 <- function(exp, gene, label=TRUE) { # TODO: add raw=TRUE for raw counts
+plot_gene2 <- function(exp, gene, label=TRUE, group_order=NULL) { # TODO: add raw=TRUE for raw counts
     gene.id <- exp$anno$ensembl_gene_id[exp$anno$external_gene_name == gene][1]
     df <- data.frame(group = exp$samples[[exp$group_column]])
+    if (!is.null(group_order)) {
+        df$group <- factor(df$group, levels = group_order)
+    }
     rownames(df) <- exp$samples$sample_id
     df[[gene]] <- exp$dge$counts[gene.id, ]
     plot <- ggplot(df, aes_string(x = "group", y = sprintf("`%s`", gene))) +
@@ -459,6 +462,110 @@ compute_de_genes <- function(exp, contrast, highlight.genes, lfc = 0) {
 }
 
 
+compute_de_genes2 <- function(exp, contrast, lfc = 0) {
+    fit <- glmFit(exp$dge, exp$design)
+    if (lfc > 0) {
+        genes <- glmTreat(fit, contrast = contrast, lfc = lfc)
+    } else {
+        genes <- glmLRT(fit, contrast = contrast)
+    }
+    most.de <- topTags(genes, n = nrow(genes$table))
+    upreg <- most.de$table[most.de$table$logFC > 0, ]
+    upreg <- upreg[order(upreg$logFC, decreasing = TRUE), ]
+    downreg <- most.de$table[most.de$table$logFC < 0, ]
+    downreg <- downreg[order(downreg$logFC), ]
+
+    return(list(
+        de = genes,
+        genes = most.de$table,
+        up = upreg,
+        down = downreg
+    ))
+}
+
+
+add_de <- function(exp, contrast, name, title, lfc = 0) {
+    if (is.null(exp$dea)) {
+        exp$dea <- list()
+    }
+    exp$dea[[name]] <- compute_de_genes(exp, contrast, lfc)
+    de.obj <- compute_de_genes2(exp, contrast, lfc)
+    return(exp)
+}
+
+
+plot_volcano <- function(
+    exp,
+    name,
+    up.name = "",
+    highlight.genes = NULL,
+    alpha = 0.6,
+    pt.size = 3
+) {
+    genes <- exp$dea[[name]]$genes
+    up <- exp$dea[[name]]$up
+    down <- exp$dea[[name]]$down
+
+    upregs <- genes$FDR < .05 & genes$logFC > 0
+    downregs <- genes$FDR < .05 & genes$logFC < 0
+    up.legend <- paste0("Up in ", up.name, " (", sum(upregs), ")")
+    down.legend <- paste0("Down in ", up.name, " (", sum(downregs), ")")
+
+    genes$significance <- "Not significant"
+    genes$significance[upregs] <- up.legend
+    genes$significance[downregs] <- down.legend
+    genes$significance <- factor(
+        genes$significance,
+        levels = c(
+            "Not significant",
+            down.legend,
+            up.legend
+        )
+    )
+
+    if (is.null(highlight.genes)) {
+        top.genes <- data.frame(rbind(
+            genes[rownames(up)[1:10], ],
+            genes[rownames(down)[1:10], ]
+        ))
+    } else {
+        top.genes <- genes[genes$external_gene_name %in% highlight.genes, ]
+    }
+
+    plot <- ggplot(genes, aes(x = logFC, y = -log10(FDR))) +
+        geom_point(
+            aes(color = significance),
+            alpha = alpha,
+            shape = 20,
+            size = pt.size
+        ) +
+        theme_minimal() +
+        scale_color_manual(
+            values = c("#ddccbb", "#306090", "#961e2e"),
+            labels = c(
+                paste0("Not significant (", sum(genes$significance == "Not significant"), ")"),
+                down.legend,
+                up.legend
+            )
+        ) +
+        theme(
+            legend.position = "top",
+            legend.text = element_text(size = 10),
+            legend.title = element_blank(),
+            plot.title = element_text(size = 16)
+        ) +
+        geom_text_repel(
+            data = top.genes,
+            aes(label = external_gene_name),
+            size = 5,
+            box.padding = unit(1, "lines"),
+            point.padding = unit(0, "lines"),
+            min.segment.length = 0
+        )
+    return(plot)
+}
+
+
 run_de <- function(exp, contrast, name, title, highlight.genes = c(), lfc = 0) {
     dir.create(name, showWarnings = FALSE)
     de.obj <- compute_de_genes(exp, contrast, highlight.genes, lfc)
@@ -530,9 +637,11 @@ run_enrichment <- function(contrast) {
     result <- list()
     #for (dir in names(all)) {
     genes <- contrast$genes
-    ranks <- genes[order(genes$logFC, decreasing = TRUE), "logFC", drop = FALSE]
-    rranks <- unlist(ranks)
-    names(rranks) <- rownames(ranks)
+    metric <- genes$LR * sign(genes$logFC)
+    #ranks <- genes[order(genes$logFC, decreasing = TRUE), "logFC", drop = FALSE]
+    rranks <- metric[order(metric, decreasing = TRUE)]
+    #rranks <- unlist(ranks)
+    names(rranks) <- rownames(genes)[order(metric, decreasing = TRUE)]
     # names(rranks) <- as.character(gene.anno$entrezgene_id[match(rownames(ranks), gene.anno$ensembl_gene_id)])
     rranks <- rranks[!is.na(names(rranks))]
     enr <- fgsea(
@@ -540,9 +649,9 @@ run_enrichment <- function(contrast) {
         stats = rranks,
         nperm = 10000
     )
-    pval <- enr[enr$pathway == "isr-mouse-extended", "padj"]
-    plot <- plotEnrichment(isr.paths$`isr-mouse-extended`, rranks) +
-        ggtitle(paste0("ISR extended from Calico, padj=", pval))
+    pval <- enr[enr$pathway == "isr-mouse", "padj"]
+    plot <- plotEnrichment(isr.paths$`isr-mouse`, rranks) +
+        ggtitle(paste0("ISR from Calico, padj=", pval))
     result[["table"]] <- enr
     result[["plot"]] <- plot
     #}
@@ -564,6 +673,7 @@ plot_kmeans <- function(exp, groups, colnames = NULL) {
     qq <- pheatmap(
         data,
         col = mycol,
+        border_color = NA,
         cluster_rows = FALSE,
         annotation_row = df,
         show_rownames = FALSE,
