@@ -1,5 +1,5 @@
 #copy of DESeq2 plotPCA, but returns the actual PCA object
-plotPCA.DESeqTransform = function(object, intgroup="condition", ntop=500)
+plotPCA_manual = function(object, intgroup="condition", ntop=500)
 {
   # calculate the variance for each gene
   rv <- rowVars(assay(object))
