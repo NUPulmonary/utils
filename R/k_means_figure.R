@@ -133,15 +133,15 @@ k_means_figure = function(dge,
   kmeans_results = kmeans_results[order(kmeans_results$cluster), ]
   counts_mat = counts_mat[kmeans_results$gene, ]
   
-  #generate breaks for each cluster
-  breaks = c()
+  #generate gaps for each cluster
+  gaps = c()
   for(i in 2:nrow(kmeans_results))
   {
     prev = kmeans_results$cluster[i - 1]
     cur = kmeans_results$cluster[i]
     if(cur != prev)
     {
-      breaks = append(breaks, i)
+      gaps = append(gaps, i)
     }
   }
   
@@ -214,7 +214,7 @@ k_means_figure = function(dge,
         start = 1
       } else
       {
-        start = breaks[i - 1] + 1
+        start = gaps[i - 1] + 1
       }
       
       #sort by p-value
@@ -237,7 +237,7 @@ k_means_figure = function(dge,
         #skip term if we've filled the cluster space already
         cluster_end = ifelse(i == length(cluster_GO),
                              yes = nrow(counts_mat),
-                             no = breaks[i] - 1) #last cluster doesn't have a following start
+                             no = gaps[i] - 1) #last cluster doesn't have a following start
         if(cur_index <= cluster_end)
         {
           cluster_annos[cur_index] = cluster_GO[[i]]$full_go[j]
@@ -249,7 +249,7 @@ k_means_figure = function(dge,
                   cluster_rows = F,
                   cluster_cols = cluster_columns,
                   clustering_method = "ward.D2",
-                  gaps_row = breaks,
+                  gaps_row = gaps,
                   show_colnames = F,
                   annotation_col = md,
                   labels_row = cluster_annos,
