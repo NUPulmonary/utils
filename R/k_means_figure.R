@@ -18,7 +18,8 @@ construct_goi_matrix = function(dge,
                                 genes_of_interest = NULL,
                                 design = NULL,
                                 cores = 1,
-                                fitType = "local")
+                                fitType = "local",
+                                minReps = 7)
 {
   register(MulticoreParam(cores))
   
@@ -38,7 +39,8 @@ construct_goi_matrix = function(dge,
                           test = "LRT", 
                           reduced = ~ 1,
                           parallel = T,
-                          fitType = fitType)
+                          fitType = fitType, 
+                          minReplicatesForReplace = minReps)
     deseq_results = as.data.frame(results(deseq_results))
     genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff))
   } else
@@ -62,16 +64,18 @@ k_elbow = function(dge,
                    genes_of_interest = NULL,
                    design = NA,
                    cores = 1,
-                   max_k = 50)
+                   max_k = 50,
+                   minReps = 7)
 {
   require(ggplot2)
-  require(tibble)
+  require(tidyverse)
   
   counts_mat = construct_goi_matrix(dge = dge,
                                     qval_cutoff = qval_cutoff,
                                     genes_of_interest = genes_of_interest,
                                     design = design,
-                                    cores = cores)
+                                    cores = cores,
+                                    minReps = minReps)
   
   #now run kmeans for all values of k, and find sums of squared differences within each cluster for each k
   sums_of_squares = mclapply(1:max_k, function(k){
@@ -106,7 +110,12 @@ k_means_figure = function(dge,
                           ensembl_db = "mmusculus_gene_ensembl",
                           cluster_columns = T,
                           return_genes = F,
-                          go_fontsize = 6,
+                          label_fontsize = 6,
+                          minReps = 7,
+                          sortColumns = F,
+                          columnSortFactor = NA,
+                          customAnno = NULL,
+                          annoJoinCol = NA,
                           ...)
 {
   require(pheatmap)
@@ -119,7 +128,8 @@ k_means_figure = function(dge,
                                     qval_cutoff = qval_cutoff,
                                     genes_of_interest = genes_of_interest,
                                     design = design,
-                                    cores = cores)
+                                    cores = cores,
+                                    minReps = minReps)
   
   kmeans_results = as.data.frame(kmeans(x = counts_mat,
                           centers = k, 
@@ -132,6 +142,14 @@ k_means_figure = function(dge,
   #order genes by cluster assignment
   kmeans_results = kmeans_results[order(kmeans_results$cluster), ]
   counts_mat = counts_mat[kmeans_results$gene, ]
+  
+  #if requested, sort columns by a factor
+  md = as.data.frame(colData(dge))
+  if(sortColumns)
+  {
+    column_order = rownames(md[order(md$Diagnosis), ])
+    counts_mat = counts_mat[, column_order]
+  }
   
   #generate gaps for each cluster
   gaps = c()
@@ -148,7 +166,6 @@ k_means_figure = function(dge,
   # extract metadata for legend (if necessary)
   if(!is.null(legend_factors))
   {
-    md = as.data.frame(colData(dge))
     md = md[, legend_factors, drop = F]
   }
   
@@ -244,6 +261,18 @@ k_means_figure = function(dge,
         }
       }
     }
+  } else
+  {
+    if(!is.null(customAnno))
+    {
+      #pare down to genes in the matrix
+      customAnno = column_to_rownames(customAnno, var = annoJoinCol)
+      customAnno = customAnno[rownames(counts_mat), ]
+      cluster_annos = customAnno
+    } else
+    {
+      cluster_annos = NULL
+    }
   }
   plot = pheatmap(counts_mat, 
                   cluster_rows = F,
@@ -253,7 +282,7 @@ k_means_figure = function(dge,
                   show_colnames = F,
                   annotation_col = md,
                   labels_row = cluster_annos,
-                  fontsize_row = go_fontsize,
+                  fontsize_row = label_fontsize,
                   annotation_names_col = F,
                   color = colorRampPalette(rev(brewer.pal(n = 7, 
                                                           name = "RdBu")))(100),
