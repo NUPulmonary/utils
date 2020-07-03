@@ -19,9 +19,11 @@ construct_goi_matrix = function(dge,
                                 design = NULL,
                                 cores = 1,
                                 fitType = "local",
-                                minReps = 7)
+                                minReps = 7,
+                                baseMeanCutoff = 0)
 {
   register(MulticoreParam(cores))
+  clusterAnnos = NULL #updated later if necessary
   
   counts_mat = counts(dge, normalized = T)
   if(is.na(qval_cutoff) || (is.null(design) && is.null(genes_of_interest))) #all cases to include all genes
@@ -42,7 +44,7 @@ construct_goi_matrix = function(dge,
                           fitType = fitType, 
                           minReplicatesForReplace = minReps)
     deseq_results = as.data.frame(results(deseq_results))
-    genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff))
+    genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff), baseMean > baseMeanCutoff)
   } else
   {
     genes_of_interest = rownames(counts_mat)
@@ -103,6 +105,7 @@ k_means_figure = function(dge,
                           cores = 1,
                           k,
                           display_go_terms = T,
+                          return_go_terms = F,
                           max_go_terms = 5,
                           colnames = F,
                           legend_factors = NULL,
@@ -116,6 +119,7 @@ k_means_figure = function(dge,
                           columnSortFactor = NA,
                           customAnno = NULL,
                           annoJoinCol = NA,
+                          baseMeanCutoff = 0,
                           ...)
 {
   require(pheatmap)
@@ -159,7 +163,7 @@ k_means_figure = function(dge,
     cur = kmeans_results$cluster[i]
     if(cur != prev)
     {
-      gaps = append(gaps, i)
+      gaps = append(gaps, (i - 1))
     }
   }
   
@@ -170,7 +174,7 @@ k_means_figure = function(dge,
   }
   
   #add GO terms, as necessary
-  if(display_go_terms)
+  if(display_go_terms || return_go_terms)
   {
     #define universe as all detected genes in dataset
     all_counts = counts(dge, normalized = T)
@@ -216,63 +220,61 @@ k_means_figure = function(dge,
         score$full_go = paste(score$go_id, score$description)
         return(score)
        }})
-      
-    #annotate clusters using empty gene name slots
-    cluster_annos = rep("", nrow(counts_mat))
-    for(i in 1:length(cluster_GO))
+    
+    if(display_go_terms)
     {
-      #skip empties
-      if(is.null(cluster_GO[[i]]))
+      #annotate clusters using empty gene name slots
+      cluster_annos = rep("", nrow(counts_mat))
+      for(i in 1:length(cluster_GO))
       {
-           next
-      }
-      if(i == 1)
-      {
-        start = 1
-      } else
-      {
-        start = gaps[i - 1] + 1
-      }
-      
-      #sort by p-value
-      cluster_GO[[i]] = cluster_GO[[i]][order(cluster_GO[[i]]$padj), ]
-      
-      #add spacing to make it readable
-      if(nrow(cluster_GO[[i]]) >= max_go_terms)
-      {
-        n_go = max_go_terms
-      } else
-      {
-        n_go = nrow(cluster_GO[[i]])
-      }
-      
-      #space based on size of cluster (fill just top half)
-      skip = max((nrow(cluster_GO[[i]]) / max_go_terms / 2), 75) #minimum of 75 for this font
-      for(j in 1:n_go)
-      {
-        cur_index = start + skip * (j - 1)
-        #skip term if we've filled the cluster space already
-        cluster_end = ifelse(i == length(cluster_GO),
-                             yes = nrow(counts_mat),
-                             no = gaps[i] - 1) #last cluster doesn't have a following start
-        if(cur_index <= cluster_end)
+        #skip empties
+        if(is.null(cluster_GO[[i]]))
         {
-          cluster_annos[cur_index] = cluster_GO[[i]]$full_go[j]
+             next
+        }
+        if(i == 1)
+        {
+          start = 1
+        } else
+        {
+          start = gaps[i - 1] + 1
+        }
+        
+        #sort by p-value
+        cluster_GO[[i]] = cluster_GO[[i]][order(cluster_GO[[i]]$padj), ]
+        
+        #add spacing to make it readable
+        if(nrow(cluster_GO[[i]]) >= max_go_terms)
+        {
+          n_go = max_go_terms
+        } else
+        {
+          n_go = nrow(cluster_GO[[i]])
+        }
+        
+        #space based on size of cluster (fill just top half)
+        skip = max((nrow(cluster_GO[[i]]) / max_go_terms / 2), 75) #minimum of 75 for this font
+        for(j in 1:n_go)
+        {
+          cur_index = start + skip * (j - 1)
+          #skip term if we've filled the cluster space already
+          cluster_end = ifelse(i == length(cluster_GO),
+                               yes = nrow(counts_mat),
+                               no = gaps[i] - 1) #last cluster doesn't have a following start
+          if(cur_index <= cluster_end)
+          {
+            cluster_annos[cur_index] = cluster_GO[[i]]$full_go[j]
+          }
         }
       }
     }
-  } else
+  }
+  if(!is.null(customAnno) && !display_go_terms)
   {
-    if(!is.null(customAnno))
-    {
-      #pare down to genes in the matrix
-      customAnno = column_to_rownames(customAnno, var = annoJoinCol)
-      customAnno = customAnno[rownames(counts_mat), ]
-      cluster_annos = customAnno
-    } else
-    {
-      cluster_annos = NULL
-    }
+    #pare down to genes in the matrix
+    customAnno = column_to_rownames(customAnno, var = annoJoinCol)
+    customAnno = customAnno[rownames(counts_mat), ]
+    cluster_annos = customAnno
   }
   plot = pheatmap(counts_mat, 
                   cluster_rows = F,
@@ -288,6 +290,7 @@ k_means_figure = function(dge,
                                                           name = "RdBu")))(100),
                   ...)
   
+  output = list("plot" = plot, "genes" = NULL, "GO" = NULL)
   if(return_genes)
   {
     require(biomaRt)
@@ -298,11 +301,14 @@ k_means_figure = function(dge,
                            y = conv,
                            by.x = "gene",
                            by.y = "ensembl_gene_id")
-    return(list("plot" = plot, "genes" = kmeans_results))
-  } else
-  {
-    return(plot)
+    output$genes = kmeans_results
   }
+  if(return_go_terms)
+  {
+    output$GO = cluster_GO
+  }
+  
+  return(output)
 }
   
   
