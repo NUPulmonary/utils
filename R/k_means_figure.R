@@ -120,6 +120,7 @@ k_means_figure = function(dge,
                           customAnno = NULL,
                           annoJoinCol = NA,
                           baseMeanCutoff = 0,
+                          random_seed = 12345,
                           ...)
 {
   require(pheatmap)
@@ -127,6 +128,7 @@ k_means_figure = function(dge,
   require(topGO)
   require(GO.db)
   require(DESeq2)
+  set.seed(random_seed)
   
   counts_mat = construct_goi_matrix(dge = dge,
                                     qval_cutoff = qval_cutoff,
@@ -137,8 +139,8 @@ k_means_figure = function(dge,
   
   kmeans_results = as.data.frame(kmeans(x = counts_mat,
                           centers = k, 
-                          iter.max = 1000)$cluster,
-                          nstart = 25)
+                          iter.max = 1000, 
+                          nstart = 25)$cluster)
   kmeans_results = rownames_to_column(kmeans_results,
                                       var = "gene")
   colnames(kmeans_results)[2] = "cluster"
