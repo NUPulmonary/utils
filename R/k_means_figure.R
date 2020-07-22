@@ -66,11 +66,13 @@ k_elbow = function(dge,
                    genes_of_interest = NULL,
                    design = NA,
                    cores = 1,
+                   random_seed = 12345,
                    max_k = 50,
                    minReps = 7)
 {
   require(ggplot2)
   require(tidyverse)
+  options(gsubfn.engine = "R")
   
   counts_mat = construct_goi_matrix(dge = dge,
                                     qval_cutoff = qval_cutoff,
@@ -81,6 +83,7 @@ k_elbow = function(dge,
   
   #now run kmeans for all values of k, and find sums of squared differences within each cluster for each k
   sums_of_squares = mclapply(1:max_k, function(k){
+    set.seed(random_seed)
     kmeans_result = kmeans(x = counts_mat, 
                            centers = k, 
                            iter.max = 1000,
@@ -116,11 +119,12 @@ k_means_figure = function(dge,
                           label_fontsize = 6,
                           minReps = 7,
                           sortColumns = F,
-                          columnSortFactor = NA,
+                          column_sort_factors = NA,
                           customAnno = NULL,
                           annoJoinCol = NA,
                           baseMeanCutoff = 0,
                           random_seed = 12345,
+                          custom_order = NULL,
                           ...)
 {
   require(pheatmap)
@@ -137,6 +141,7 @@ k_means_figure = function(dge,
                                     cores = cores,
                                     minReps = minReps)
   
+  set.seed(random_seed)
   kmeans_results = as.data.frame(kmeans(x = counts_mat,
                           centers = k, 
                           iter.max = 1000, 
@@ -144,17 +149,28 @@ k_means_figure = function(dge,
   kmeans_results = rownames_to_column(kmeans_results,
                                       var = "gene")
   colnames(kmeans_results)[2] = "cluster"
+  #if user specifies a custom order of clusters (top to bottom)
+  if(!is.null(custom_order))
+  {
+    cluster_conv = data.frame(new_cluster = c(1:max(kmeans_results$cluster)),
+                              cluster = custom_order)
+    kmeans_results = kmeans_results %>%
+      left_join(., cluster_conv) %>% 
+      arrange(new_cluster)
+    colnames(kmeans_results) = c("gene", "old_cluster", "cluster") #fit into following code
+  }
   
   #order genes by cluster assignment
   kmeans_results = kmeans_results[order(kmeans_results$cluster), ]
   counts_mat = counts_mat[kmeans_results$gene, ]
   
-  #if requested, sort columns by a factor
+  #if requested, sort columns by any number of factors
   md = as.data.frame(colData(dge))
   if(sortColumns)
   {
-    column_order = rownames(md[order(md$Diagnosis), ])
-    counts_mat = counts_mat[, column_order]
+    columns_sorted = md %>% 
+      arrange_(.dots = column_sort_factors)
+    counts_mat = counts_mat[, rownames(columns_sorted)]
   }
   
   #generate gaps for each cluster
@@ -184,7 +200,7 @@ k_means_figure = function(dge,
     fisherTest = new("classicCount", testStatistic = GOFisherTest, name = "Fisher test")
     
     clusters = unique(as.character(kmeans_results$cluster))
-    cluster_GO = lapply(clusters, function(x){
+    cluster_GO = mclapply(clusters, function(x){
       cluster_genes = kmeans_results[kmeans_results$cluster == x, "gene"]
       selection = as.numeric(universe %in% cluster_genes)
       names(selection) = universe
@@ -221,7 +237,9 @@ k_means_figure = function(dge,
         #add descriptions
         score$full_go = paste(score$go_id, score$description)
         return(score)
-       }})
+       }},
+      mc.preschedule = T, 
+      mc.cores = getOption("mc.cores", cores))
     
     if(display_go_terms)
     {
@@ -271,12 +289,15 @@ k_means_figure = function(dge,
       }
     }
   }
-  if(!is.null(customAnno) && !display_go_terms)
+  if(!is.null(customAnno) && display_go_terms == FALSE)
   {
     #pare down to genes in the matrix
     customAnno = column_to_rownames(customAnno, var = annoJoinCol)
     customAnno = customAnno[rownames(counts_mat), ]
     cluster_annos = customAnno
+  } else if(is.null(customAnno) && display_go_terms == FALSE)
+  {
+    cluster_annos = NULL
   }
   plot = pheatmap(counts_mat, 
                   cluster_rows = F,
