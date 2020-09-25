@@ -65,7 +65,7 @@ clean_sample_sheet = function(original, #path to original "raw" RNA info excel s
   
   if(reverse_complement_index2)
   {
-    data$index2 = reverseComplement(data$index2, case = "upper")
+    data$index2 = spgs::reverseComplement(data$index2, case = "upper")
   }
   
   #join together   
