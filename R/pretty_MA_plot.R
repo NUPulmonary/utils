@@ -57,7 +57,7 @@ pretty_MA_plot = function(results,
   }
                                  
   
-  suppressWarnings(print(plt))
+  return(plt)
 }   
 
 id_convert = function(results,
