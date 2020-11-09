@@ -25,6 +25,7 @@ pretty_MA_plot = function(results,
   require(biomaRt)
   require(dplyr)
   require(tibble)
+  require(tidyverse)
   
   if(convert_ids) #from ensembl to common symbols
   {
@@ -35,12 +36,19 @@ pretty_MA_plot = function(results,
                custom_annotation = custom_annotation)
     name_col = "external_gene_name"
   }
+  #add colors for significant
+  results = results %>% 
+    mutate(color = factor(case_when(padj >= 0.05 ~ "NS",
+                                    padj < 0.05 & log2FoldChange >= lfc_threshold ~ "upregulated",
+                                    padj < 0.05 & log2FoldChange <= -lfc_threshold ~ "downregulated")))
   
   plt = ggplot(results, 
                aes(x = baseMean, y = log2FoldChange)) +
-    geom_point(aes(color = padj < 0.05 & abs(log2FoldChange) >= lfc_threshold)) +
+    geom_point(aes(color = color)) +
     scale_x_log10(limits = c(1, NA)) +
-    scale_color_manual(values = c(alpha(colour = "grey50", alpha = 0.05), "firebrick4")) +
+    scale_color_manual(values = c("NS" = alpha(colour = "grey50", alpha = 0.05),
+                                  "upregulated" = "firebrick4",
+                                  "downregulated" = "dodgerblue4")) +
     theme(legend.position = "none") + 
     xlab("Mean Expression") +
     ylab("log2(Fold Change)")
