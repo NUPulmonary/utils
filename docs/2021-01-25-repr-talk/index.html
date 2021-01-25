@@ -1,0 +1,463 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <!-- <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; frame-src https://github.com"> -->
+
+        <title>reveal.js</title>
+
+        <link rel="stylesheet" href="reveal.js/dist/reset.css">
+        <link rel="stylesheet" href="reveal.js/dist/reveal.css">
+        <link rel="stylesheet" href="reveal.js/dist/theme/serif.css" id="theme">
+
+        <!-- Theme used for syntax highlighted code -->
+        <link rel="stylesheet" href="reveal.js/plugin/highlight/zenburn.css" id="highlight-theme">
+        <style type="text/css">
+        .reveal-viewport {
+            background: #ebf3f8;
+            background-color: #ebf3f8;
+        }
+        .reveal small {font-size: 0.4em;}
+        .reveal table td {border-right: 1px solid}
+        .reveal table td:last-child {border-right: none}
+        .reveal .graph {
+            width: 600px;
+            height: 300px;
+            border-bottom: 1px solid #333;
+            border-left: 1px solid #333;
+            position: relative;
+        }
+        .reveal .graph-x {
+            width: 600px;
+            height: 300px;
+            border-bottom: 1px solid #333;
+            position: relative;
+        }
+        .reveal .graph .x-tip:before, .reveal .graph-x .x-tip:before {
+            content: ">";
+            position: absolute;
+            right: -2px;
+            font-size: 18px;
+            bottom: -13px;
+        }
+        .reveal .graph .x-label, .reveal .graph-x .x-label {
+            position: absolute;
+            width: 100%;
+            left: 0;
+            bottom: -1.5em;
+            font-size: 18px;
+            text-align: center;
+        }
+        .reveal .graph .y-tip:before {
+            content: ">";
+            position: absolute;
+            top: -7px;
+            font-size: 18px;
+            left: -5px;
+            transform: rotate(-90deg);
+        }
+        .reveal .graph .y-label {
+            position: absolute;
+            /* height: 100%; */
+            left: -1.5em;
+            top: 50%;
+            margin-top: -1em;
+            margin-left: -1.2em;
+            font-size: 18px;
+            text-align: center;
+            vertical-align: bottom;
+            transform: rotate(-90deg);
+        }
+        .reveal .graph b, .reveal .graph-x b {
+            position: absolute;
+        }
+        .reveal .graph b:before, .reveal .graph-x b:before {
+            content: "•";
+        }
+        .reveal .slides section .fragment.highlight-green.visible {
+            color: #137913;
+        }
+        </style>
+    </head>
+    <body>
+        <div class="reveal">
+            <div class="slides">
+<section>
+    <h3>Introduction to reproducible computing for biologists</h3>
+    <br/>
+    Nick Markov 1/25/2021
+
+    <!-- <small>
+        What we will cover:<br/>
+        <ul><li>how to install python and start writing code</li>
+        <li>how to read code written by you or other people</li>
+        <li>how to use other people’s code</li>
+        <li>how to get through first errors to first plot</li></ul>
+    </small> -->
+    <!-- Definitions: replicability & reproducibility,and computqtional
+    How science works??
+    A spectrum of reproducibility
+    Usability as y axis
+
+    Who is the client?
+    Journals: policy review ?
+    Community: good but doesn't work now on a large scale
+    Ourselves: be sure about your research, lab reuse, bus number
+    (Examples ms1 sample swap rogan, isrib stranded analysis, isrib exp, pediatric covid reuse rna seq and deconvolution)
+
+    This theme is close to record keeping, software engineering, data management, project management...
+
+    How to do it?
+    Isrib rnaseq example ?
+    Record things in a specific place
+    Keep track of details
+    Back it up
+    Do not modify original data
+    Avoid excel, manual data manipulation
+
+    Code part
+    Why it happens: data, versions, randomness
+
+    Record environment
+    Containers
+    Version control code
+    github
+    Jupyter/R notebooks (example of mine, example of interactive, clustering preprint)
+
+
+    Further reading -->
+
+
+</section>
+<!-- <section>Anecdote (?)</section> -->
+<section>
+    <div style="float: right"><img src="slide1.png"/><br/><small>Figure 1, Patil <i>et al.</i>, 2019</small></div>
+    <h3>Replicability & Reproducibility</h3>
+    — Replicate: perform a new study to confirm or disprove original study<br/>
+    — Reproduce: re-do analysis of data from original study to confirm results<br/>
+<br/>
+    <div class="fragment">— Computational reproducibility: re-run study code on study data to get results</div>
+    <!-- How science works??
+    A spectrum of reproducibility
+    Usability as y axis -->
+</section>
+<section>
+    <h3>The Spectrum of Reproducibility</h3>
+    <div class="r-stack">
+        <div class="fragment fade-out" data-fragment-index="0">
+            <div class="graph-x">
+                <i class="x-tip"></i>
+                <i class="x-label">Reproducibility</i>
+                <b style="left: 10px; bottom: 10px;"></b>
+                <b style="left: 20px; bottom: 50px;"></b>
+                <b style="left: 100px; bottom: 30px;"></b>
+                <b style="left: 50px; bottom: 20px;"></b>
+
+                <b style="left: 250px; bottom: 5px;"></b>
+                <b style="left: 320px; bottom: 20px;"></b>
+
+                <b style="left: 500px; bottom: 10px;"></b>
+                <b style="left: 450px; bottom: 30px;"></b>
+                <b style="left: 480px; bottom: 15px;"></b>
+            </div>
+        </div>
+        <div class="fragment current-visible" data-fragment-index="0">
+            <div class="graph">
+                <i class="x-tip"></i>
+                <i class="y-tip"></i>
+                <i class="x-label">Reproducibility</i>
+                <i class="y-label">Usability</i>
+                <b style="left: 10px; bottom: 15px;"></b>
+                <b style="left: 20px; bottom: 150px;"></b>
+                <b style="left: 100px; bottom: 40px;"></b>
+                <b style="left: 50px; bottom: 250px;"></b>
+
+                <b style="left: 250px; bottom: 15px;"></b>
+                <b style="left: 320px; bottom: 220px;"></b>
+
+                <b style="left: 500px; bottom: 20px;"></b>
+                <b style="left: 450px; bottom: 130px;"></b>
+                <b style="left: 480px; bottom: 260px;"></b>
+            </div>
+        </div>
+    </div>
+</section>
+<section>
+    <h3>Why should do we do it?</h3>
+    <ul>
+        <li class="fragment">Journals</li>
+        <li class="fragment">Community</li>
+        <li class="fragment"><div class="fragment highlight-green">Ourselves</div></li>
+    </ul>
+    <!-- Who is the client?
+    Journals: policy review ?
+    Community: good but doesn't work now on a large scale
+    Ourselves: be sure about your research, lab reuse, bus number
+    (Examples ms1 sample swap rogan, isrib stranded analysis, isrib exp, pediatric covid reuse rna seq and deconvolution) -->
+</section>
+<section>
+    Investing in reproducibility is close to:<br/>
+    <ul>
+        <li>record keeping</li>
+        <li>software engineering</li>
+        <li>data management</li>
+        <li>project management</li>
+        <li>automation</li>
+        <li>…</li>
+    </ul>
+</section>
+<section>
+    <section>
+        <h4>Have a folder for each project</h4>
+        <pre><code data-trim data-noescape class="plaintext">
+project-1/
+  code/
+    01nasal-epithelium/
+  results/
+    01nasal-epithelium/
+  data/
+    201211_A00749_0168_AHWY37DRXX/
+project-2/
+  code/
+  data/
+  raw/
+project-3/
+  201105_bulk_analysis_batch1/
+  201111_bulk_analysis_batch2/
+  201121_bulk_analysis_all/
+        </code></pre>
+    </section>
+    <section>
+        <h4>Have a folder for each project</h4>
+        <img src="isrib-quest.png"/>
+    </section>
+    <section>
+        <h4>Have a folder for each project</h4>
+        <img src="ped-covid.png"/>
+    </section>
+</section>
+<section>
+    <section>
+        <h4>Record everything for future archaeologists</h4>
+        <img src="isrib-box.png"/>
+    </section>
+    <section>
+        <h4>Record everything for future archaeologists</h4>
+        <img src="am-Sftpc.png"/>
+    </section>
+    <section>
+        <h4>Record everything for future archaeologists</h4>
+        <img src="at2-Mrc1.png"/>
+    </section>
+    <section>
+        <h4>Record everything for future archaeologists</h4>
+        <img src="plate-layout.png"/>
+    </section>
+    <section>
+        <h4>Record everything for future archaeologists</h4>
+        <a href="https://github.com/NUPulmonary/isrib/issues/16">NUPulmonary/isrib/issues/16</a>
+    </section>
+</section>
+<section>
+    <h4>Do not modify original data</h4>
+    <img src="isrib-quest-raw.png"/>
+</section>
+<section>
+    <section>
+        <h4>Back it all up: Box</h4>
+        <img src="isrib-box.png"/>
+    </section>
+    <section>
+        <h4>Back it all up: FSM res files</h4>
+        <img src="ziyou-fsmres.png"/>
+    </section>
+</section>
+<section>
+    <section>
+        <h4>Avoid manual data manipulation</h4>
+        <img src="pool-raw.png"/>
+    </section>
+    <section>
+        <h4>Avoid manual data manipulation</h4>
+        <img src="pool-manual.png"/>
+    </section>
+    <section>
+        <h4>Avoid manual data manipulation</h4>
+        <pre><code data-trim data-noescape data-line-numbers>
+rule loading_factors:
+  input: "{dir}/metrics_summary.csv"
+  output: "{dir}/loading_factors.csv"
+  params:
+    slurm__skip=True
+  run:
+    data = pd.read_csv(input[0])
+    data = data.iloc[:, :4]
+    mean_reads = data.loc[:, "Mean Reads per Cell"]
+    data["Loading factor"] = mean_reads.max() / mean_reads
+    data.to_csv(output[0], index=False)
+        </code></pre>
+    </section>
+</section>
+<section>
+    <h4>Tips on how to approach reproducibility<br/>Pt 1: general</h4>
+    <ul>
+        <li>Have a folder for each project</li>
+        <li>Record everything in organized way where you would be able to find it</li>
+        <li>Do not modify original data</li>
+        <li>Back it all up</li>
+        <li>Avoid manual data manipulation</li>
+    </ul>
+    <!-- Isrib rnaseq example ?
+    Record things in a specific place
+    Keep track of details
+    Back it up
+    Do not modify original data
+    Avoid excel, manual data manipulation -->
+</section>
+<section>
+    <h4>Tips on how to approach reproducibility<br/>Pt 2: code</h4>
+    Why can running the same code produce different results?<br/>
+    <ul>
+        <li>Data changed</li>
+        <li class="fragment">Code changed</li>
+        <li class="fragment">Algorithms that rely on randomness</li>
+    </ul>
+</section>
+<section>
+    <section>
+        <h4>Random seed</h4>
+        <img src="SSc_C1-umap-0.png" width="400"/><img src="SSc_C1-umap-40.png" width="400"/><br/>
+        <pre><code data-trim data-noescape>
+scanpy.tl.umap(adata) # left
+scanpy.tl.umap(adata, random_state=40) # right
+        </code></pre>
+    </section>
+    <section>
+        <h4>Random seed. What to do?</h4>
+        <ul>
+            <li>When doing analysis, check different seeds</li>
+            <li>Choose one and set it via parameter</li>
+            <li>Or with <code>set.seed()</code> function in R</li>
+        </ul>
+    </section>
+</section>
+<section>
+    <section>
+        <h4>External code</h4>
+        <ul>
+            <li>R/python packages, other packages or libraries</li>
+            <li>Packages have versions</li>
+            <li>Packages have dependencies</li>
+        </ul>
+    </section>
+    <section>
+        <h4>Dependency graph</h4>
+        <img src="ggplot2-deps.png"/>
+    </section>
+    <section>
+        <h4>Session info</h4>
+        <img src="session-info1.png"/><br/>
+        <img src="session-info2.png"/>
+    </section>
+    <section>
+        <h4>Environments</h4>
+        Package installation space per project<br/>
+        <a href="https://rstudio.github.io/renv/articles/renv.html">renv</a> for R<br/>
+        <a href="https://pipenv.pypa.io/">pipenv</a> for python
+    </section>
+    <section>
+        <h4>Containers</h4>
+        Singularity or Docker<br/>
+        <ul>
+            <li>images of whole operating system with everything you need for your task</li>
+            <li>remember USB sticks you could boot from?</li>
+        </ul>
+    </section>
+</section>
+<section>
+    <section>
+        <h4>Your code</h4>
+        Git<br/>
+        <ul>
+            <li>history of changes</li>
+            <li>forces you to describe changes with short messages</li>
+            <li>you are responsible</li>
+        </ul>
+        Use it from<br/>
+        <ul>
+            <li>command line</li>
+            <li>code editor</li>
+            <li>github application</li>
+        </ul><br/>
+        Host repository on github
+    </section>
+    <section>
+        <h4>History of changes</h4>
+        <a href="https://github.com/NUPulmonary/SSc-v2/commits/master">NUPulmonary/SSc-v2/commits/master</a>
+    </section>
+    <section>
+        <h4>GitHub</h4>
+        <ul>
+            <li>view history</li>
+            <li>issues / tasks</li>
+            <li>wiki / documentation</li>
+            <li>collaboration / exchange point</li>
+            <li>publishing</li>
+        </ul><br/>
+        <a href="https://github.com/NUPulmonary/SSc-v2">Example</a>
+    </section>
+    <section>
+        <h4>Code notebooks</h4>
+        <ul>
+            <li>R markdown (Rmd) or Jupyter (for python) notebooks</li>
+            <li>combine code, text and plots</li>
+            <li>readable logic flow for code</li>
+            <li>interactive plots</li>
+        </ul><br/>
+        <a href="https://nbviewer.jupyter.org/github/NUPulmonary/scarches-covid-reference/blob/master/main.ipynb">scarches</a><br/>
+        <a href="https://nbviewer.jupyter.org/github/ivirshup/constclust_supp/blob/master/pbmc/pbmc-overview.ipynb">constclust</a><br/>
+        <small>Virshup <i>et al.</i>, 2021</small>
+    </section>
+</section>
+<section>
+    <h4>Tips on how to approach reproducibility<br/>Pt 2: code</h4>
+    <ul>
+        <li>Record environment</li>
+        <li>Containers</li>
+        <li>Version control code</li>
+        <li>github</li>
+        <li>Jupyter/R notebooks</li>
+    </ul>
+</section>
+<section>
+    <h4>Our small collection of scripts</h4>
+    <a href="https://github.com/NUPulmonary/utils">https://github.com/NUPulmonary/utils</a>
+</section>
+<section>Further reading<br/>
+    <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1003285">Ten Simple Rules for Reproducible Computational Research</a><br/>
+    <a href="https://constantamateur.github.io/2020-12-06-projMan/">Reproducible analysis for the very lazy</a>
+</section>
+            </div>
+        </div>
+
+        <script src="reveal.js/dist/reveal.js"></script>
+        <script src="reveal.js/plugin/notes/notes.js"></script>
+        <script src="reveal.js/plugin/markdown/markdown.js"></script>
+        <script src="reveal.js/plugin/highlight/highlight.js"></script>
+        <script>
+            // More info about initialization & config:
+            // - https://revealjs.com/initialization/
+            // - https://revealjs.com/config/
+            Reveal.initialize({
+                hash: true,
+                controlsTutorial: false,
+                slideNumber: "c/t",
+                transition: "none",
+
+                // Learn about plugins: https://revealjs.com/plugins/
+                plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+            });
+        </script>
+    </body>
+</html>
