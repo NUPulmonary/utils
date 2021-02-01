@@ -73,7 +73,6 @@ rule cellranger:
         slurm__cores=8,
         slurm__hours=16,
         slurm__mem=60,
-        # input_paths=lambda wildcards, input: ",".join(("../" + i[len("../../data/"):] for i in input)),
         input_paths=lambda wildcards, input: ",".join([os.path.realpath(i) for i in input]),
         chemistry="auto",
         transcriptome="/projects/b1038/tools/refdata-cellranger-GRCh38-1.2.0/",
@@ -93,8 +92,8 @@ rule cellranger:
 
 rule demultiplex:
     input:
-        "../../raw/{RunID}",
-        "../../data/{RunID,\w+}.csv"
+        "../raw/{RunID}",
+        "../data/{RunID,\w+}.csv"
     output: directory(f"{DATA_DIR}/fastq-run/{{RunID}}")
     params:
         slurm__partition="genomics-himem",
@@ -120,7 +119,7 @@ rule demultiplex:
 
 rule prepare_samples:
     input: ancient("samples.csv")
-    output: "../../data/{RunID,\w+}.csv"
+    output: "../data/{RunID,\w+}.csv"
     params:
         slurm__skip=1
     run:
