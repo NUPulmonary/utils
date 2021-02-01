@@ -77,7 +77,6 @@ rule cellranger:
         input_paths=lambda wildcards, input: ",".join([os.path.realpath(i) for i in input]),
         chemistry="auto",
         transcriptome="/projects/b1038/tools/refdata-cellranger-GRCh38-1.2.0/",
-        sample=fastq_sample_name
     shell:
         """
         module purge all
@@ -85,7 +84,7 @@ rule cellranger:
 
         cd `dirname {output}`
         cellranger count --id {wildcards.sample} \
-            --sample={params.sample} \
+            --sample={wildcards.sample} \
             --transcriptome={params.transcriptome} \
             --fastqs={params.input_paths} \
             --chemistry={params.chemistry}
