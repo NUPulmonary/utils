@@ -1,0 +1,9 @@
+{
+    "__default__" : {
+        "account" : "b1042",
+        "partition" : "genomics",
+        "mail_type" : "FAIL",
+        "mail_user" : "<your email>",
+        "nodes" : "1"
+    }
+}

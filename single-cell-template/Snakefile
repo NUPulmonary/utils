@@ -1,0 +1,133 @@
+import os
+import sys
+sys.path.insert(0, "../lib")
+
+import numpy as np
+import pandas as pd
+
+
+R_OPTS = "--no-site-file --no-environ --no-restore"
+
+DATA_DIR = "../data"
+SAMPLES = pd.read_csv("samples.csv")
+
+
+def get_count_input_file(wildcards):
+    if os.path.exists(f"{DATA_DIR}/fastq/{wildcards.sample}"):
+        return [f"{DATA_DIR}/fastq/{wildcards.sample}"]
+    run_ids = SAMPLES.RunID[SAMPLES.External_ID == wildcards.sample].values
+    return [f"{DATA_DIR}/fastq-run/{run_id}" for run_id in run_ids]
+
+
+rule all:
+    input:
+        f"{DATA_DIR}/cellranger/metrics_summary.csv",
+
+
+rule metrics_summary:
+    input:
+        expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.External_ID.unique())
+    output: "{dir}/cellranger/metrics_summary.csv"
+    params:
+        slurm__skip=True
+    run:
+        result = []
+        for sample in input:
+            m = pd.read_csv(f"{sample}/outs/metrics_summary.csv")
+            m.insert(0, "Sample", os.path.basename(sample))
+            result.append(m)
+        result = sorted(result, key=lambda x: x.shape[1], reverse=True)
+        result = pd.concat(result, sort=False)
+        for column in result.columns:
+            if result[column].dtype not in ("int64", "float64"):
+                match = (~result[column].isna()) & result[column].str.match(r"^(\d+,)*\d+$")
+                new_column = result[column].copy()
+                new_column[match] = new_column.loc[match].str.replace(",", "")
+                result[column] = new_column
+        result.sort_values("Sample").to_csv(output[0], index=False)
+
+
+rule scrublet:
+    input:
+        "{dir}/cellranger/{sample}"
+    output:
+        "{dir}/scrublet/{sample}_doublets.csv",
+        "{dir}/scrublet/{sample}_threshold.txt"
+    params:
+        slurm__hours=1,
+        slurm__cores=12,
+        slurm__mem=8
+    run:
+        run_scrublet.run_scrublet(
+            os.path.join(input[0], "outs"),
+            save_to=output[0].replace("doublets.csv", "")
+        )
+
+
+rule cellranger:
+    input: get_count_input_file
+    output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
+    params:
+        #slurm__account="b1038",
+        # slurm__partition="genomics-himem",
+        slurm__cores=8,
+        slurm__hours=16,
+        slurm__mem=60,
+        # input_paths=lambda wildcards, input: ",".join(("../" + i[len("../../data/"):] for i in input)),
+        input_paths=lambda wildcards, input: ",".join([os.path.realpath(i) for i in input]),
+        chemistry="auto",
+        transcriptome="/projects/b1038/tools/refdata-cellranger-GRCh38-1.2.0/",
+        sample=fastq_sample_name
+    shell:
+        """
+        module purge all
+        module load cellranger/3.1.0
+
+        cd `dirname {output}`
+        cellranger count --id {wildcards.sample} \
+            --sample={params.sample} \
+            --transcriptome={params.transcriptome} \
+            --fastqs={params.input_paths} \
+            --chemistry={params.chemistry}
+        """
+
+
+rule demultiplex:
+    input:
+        "../../raw/{RunID}",
+        "../../data/{RunID,\w+}.csv"
+    output: directory(f"{DATA_DIR}/fastq-run/{{RunID}}")
+    params:
+        slurm__partition="genomics-himem",
+        slurm__cores=8,
+        slurm__hours=6,
+        slurm__mem=40,
+        lanes=lambda wildcards: ",".join(np.unique(SAMPLES.Lane[SAMPLES.RunID == wildcards.RunID].astype(str))),
+        flowcell=lambda wildcards: wildcards.RunID.split("_")[-1][1:]
+    shell:
+        """
+        module purge all
+        module load bcl2fastq
+        module load cellranger/3.1.0
+
+        cellranger mkfastq --run={input[0]} \
+            --csv={input[1]} \
+            --output-dir={output[0]}
+
+        rm -rf {params.flowcell}
+        rm __{params.flowcell}.mro
+        """
+
+
+rule prepare_samples:
+    input: ancient("samples.csv")
+    output: "../../data/{RunID,\w+}.csv"
+    params:
+        slurm__skip=1
+    run:
+        samples = SAMPLES.loc[SAMPLES.RunID == wildcards.RunID, ["Lane", "External_ID", "Index"]]
+        samples.columns = ["Lane", "Sample", "Index"]
+        samples.to_csv(
+            output[0],
+            index=False
+        )
