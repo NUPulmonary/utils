@@ -14,7 +14,8 @@ bulkDEA = function(object, #seurat object
                    outDir, #directory to output results
                    outPrefix, #file prefix for results files
                    minCells = 50, #whether or not to override the minimum number of cells/samples
-                   cores = 1) #cores to run in parallel
+                   cores = 1, #cores to run in parallel
+                   fit_type = "parametric") #to control dispersion fitting
 {
    require(Seurat)
    require(DESeq2)
@@ -111,7 +112,7 @@ bulkDEA = function(object, #seurat object
       joinedMat = joinedMat[, match(rownames(metaData), colnames(joinedMat))]
       des = DESeqDataSetFromMatrix(countData = joinedMat, colData = metaData, design = design)
       saveRDS(des, paste(dateString, outPrefix, cell, "subset", "des.rds", sep = "_"))
-      dge = DESeq(des, parallel = T)
+      dge = DESeq(des, parallel = T, fitType = fit_type)
       
       allFactors = sort(unique(as.character(metaData[, 1])), decreasing = T) # reverse order so we get older/younger for all comps
       allComps = combn(x = allFactors, m = 2, simplify = F) # every possible combination of ages; list of older, younger for each comp
