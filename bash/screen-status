@@ -1,0 +1,14 @@
+#!/bin/bash
+
+for host in quser{21..24}; do
+    if [[ $host == `hostname` ]]; then
+        list=`screen -ls | head -n -2`
+    else
+        list=`ssh $host "screen -ls | head -n -2"`
+    fi
+    if [[ ! -z "$list" ]]; then
+        echo -e "\e[1;37;40m$host\e[0m"
+        echo "$list"
+    fi
+done
+
