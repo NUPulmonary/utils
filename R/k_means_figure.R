@@ -45,7 +45,7 @@ construct_goi_matrix = function(dge,
                           minReplicatesForReplace = minReps)
     deseq_results = as.data.frame(results(deseq_results))
     genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff), baseMean > baseMeanCutoff)
-  } else
+  } else if(is.null(genes_of_interest))
   {
     genes_of_interest = rownames(counts_mat)
   }
