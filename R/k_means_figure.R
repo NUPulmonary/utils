@@ -11,6 +11,7 @@
 # actual k to use in final plot
 # colnames: whether or not to display column labels in heatmap
 # legend_factors: vector of factors to add to heatmap legend (must be in des metadata)
+# tidy_go: if true, join go terms into a tidy data frame
 
 #for extracting counts for genes of interest from a DESeqDataSet
 construct_goi_matrix = function(dge,
@@ -125,6 +126,7 @@ k_means_figure = function(dge,
                           baseMeanCutoff = 0,
                           random_seed = 12345,
                           custom_order = NULL,
+                          tidy_go = FALSE,
                           ...)
 {
   require(pheatmap)
@@ -328,6 +330,31 @@ k_means_figure = function(dge,
   }
   if(return_go_terms)
   {
+    if(tidy_go) #join up into data frame
+    {
+      for(i in 1:length(cluster_GO))
+      {
+        if(!is.null(cluster_GO[[i]]))
+        {
+          cluster_GO[[i]]$cluster = i
+        }
+      }
+      #catch error when there are no terms at all
+      non_null = sum(vapply(cluster_GO, function(x){ !is.null(x) }, FUN.VALUE = 1))
+      if(non_null > 0)
+      {
+        cluster_GO = trybind_rows(cluster_GO) %>% 
+          arrange(cluster, padj)
+      } else
+      {
+        message("No significant go terms to return")
+      }
+    }
+    non_null = sum(vapply(cluster_GO, function(x){ !is.null(x) }, FUN.VALUE = 1))
+    if(non_null == 0)
+    {
+      message("No significant go terms to return")
+    }
     output$GO = cluster_GO
   }
   
