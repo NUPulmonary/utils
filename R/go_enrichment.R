@@ -6,6 +6,8 @@
 # deseq_object: a DESeq2 object with library normalization pre-calculated using DESeq(), vst(), etc
 # goi: vector genes of interest in ensembl gene ID format
 # go_annotations: R package with ensembl:GO annotations (defaults to mouse)
+
+# Returns a data frame with go terms and adjusted p-values
 go_enrichment = function(deseq_object,
                          goi,
                          go_annotations = "org.Mm.eg.db")
