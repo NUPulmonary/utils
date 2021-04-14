@@ -49,7 +49,7 @@ go_enrichment = function(deseq_object,
     dplyr::mutate(full_go = paste(go_id, description))
   
   #in case of no significant go terms, return NULL
-  if(nrow(score) = 0)
+  if(nrow(score) == 0)
   {
     message("No significant enrichment detected")
     return(NULL)
