@@ -80,12 +80,12 @@ id_convert = function(results,
     results = as.data.frame(results)
   }
   
-  mart = useMart("ensembl", mart_name)
   if(!is.null(custom_annotation))
   {
     conv = custom_annotation
   } else
   {
+    mart = useMart("ensembl", mart_name)
     conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
                  mart = mart)
   }
