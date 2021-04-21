@@ -1,6 +1,13 @@
 #copy of DESeq2 plotPCA, but returns the actual PCA object
-plotPCA_manual = function(object, intgroup="condition", ntop=500, pcs = 2)
+#one addition: merge_metadata, which joins output dataframe with colData. Defaults to FALSE for compatibility reasons.
+plotPCA_manual = function(object, 
+                          intgroup="condition", #essentially ignored if merge_metadata = TRUE
+                          ntop=500, 
+                          pcs = 2,
+                          merge_metadata = FALSE)
 {
+  require(tidyverse)
+  
   # calculate the variance for each gene
   rv <- rowVars(assay(object))
   
@@ -32,6 +39,19 @@ plotPCA_manual = function(object, intgroup="condition", ntop=500, pcs = 2)
   colnames(tmp) = paste0("PC", 1:pcs)
   d = cbind(tmp, d)
   attr(d, "percentVar") <- percentVar[1:pcs]
+  
+  if(merge_metadata == TRUE)
+  {
+    md = colData(object) %>% 
+      as.data.frame() %>% 
+      rownames_to_column("sample")
+    d = d %>% 
+      dplyr::select(-group) %>% 
+      dplyr::rename(sample = name) %>% 
+      left_join(., md) %>% 
+      column_to_rownames("sample")
+  }
+      
   
   plt = ggplot(data=d, aes_string(x="PC1", y="PC2", color="group")) + geom_point(size=3) + 
     xlab(paste0("PC1: ",round(percentVar[1] * 100),"% variance")) +
