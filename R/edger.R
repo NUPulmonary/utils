@@ -624,8 +624,8 @@ run_de <- function(exp, contrast, name, title, highlight.genes = c(), lfc = 0) {
 }
 
 
-run_enrichment <- function(contrast) {
-    isr.paths <- gmtPathways("../../docs/mouse-isr.gmt")
+run_enrichment <- function(contrast, pathways = "../../docs/mouse-isr.gmt") {
+    isr.paths <- gmtPathways(pathways)
     # isr.paths <- examplePathways
     for (path in names(isr.paths)) {
       isr.paths[[path]] <- unique(isr.paths[[path]])
