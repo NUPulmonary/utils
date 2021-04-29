@@ -41,15 +41,6 @@ go_enrichment = function(deseq_object,
     dplyr::filter(padj < 0.05) %>% 
     dplyr::arrange(padj)
   
-  # add descriptions using go DB
-  for(i in 1:nrow(score))
-  {
-    score$description[i] = GOTERM[[score$go_id[i]]]@Term
-  }
-  
-  score = score %>% 
-    dplyr::mutate(full_go = paste(go_id, description))
-  
   #in case of no significant go terms, return NULL
   if(nrow(score) == 0)
   {
@@ -57,6 +48,14 @@ go_enrichment = function(deseq_object,
     return(NULL)
   } else
   {
+    # add descriptions using go DB
+    for(i in 1:nrow(score))
+    {
+      score$description[i] = GOTERM[[score$go_id[i]]]@Term
+    }
+    
+    score = score %>% 
+      dplyr::mutate(full_go = paste(go_id, description))
     return(score)
   }
 }
