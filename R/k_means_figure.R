@@ -323,10 +323,10 @@ k_means_figure = function(dge,
     mart = useMart("ensembl", ensembl_db)
     conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
                  mart = mart)
-    kmeans_results = merge(x = kmeans_results, 
-                           y = conv,
-                           by.x = "gene",
-                           by.y = "ensembl_gene_id")
+    kmeans_results = left_join(kmeans_results,
+                               conv,
+                           by = c("gene" = "ensembl_gene_id")) %>% 
+      arrange(cluster)
     output$genes = kmeans_results
   }
   if(return_go_terms)
