@@ -69,7 +69,7 @@ k_elbow = function(dge,
                    cores = 1,
                    random_seed = 12345,
                    max_k = 50,
-                   minReps = 7)
+                   minReps = 7) #this is the default for DESeq2
 {
   require(ggplot2)
   require(tidyverse)
@@ -196,6 +196,7 @@ k_means_figure = function(dge,
   #add GO terms, as necessary
   if(display_go_terms || return_go_terms)
   {
+    require(go_annotations, character.only = T) #load GO package using variable
     #define universe as all detected genes in dataset
     all_counts = counts(dge, normalized = T)
     universe = rownames(all_counts[rowSums(all_counts) > 0, ])
@@ -343,7 +344,7 @@ k_means_figure = function(dge,
       non_null = sum(vapply(cluster_GO, function(x){ !is.null(x) }, FUN.VALUE = 1))
       if(non_null > 0)
       {
-        cluster_GO = trybind_rows(cluster_GO) %>% 
+        cluster_GO = bind_rows(cluster_GO) %>% 
           arrange(cluster, padj)
       } else
       {
