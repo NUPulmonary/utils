@@ -12,8 +12,8 @@ go_enrichment = function(deseq_object,
                          goi,
                          go_annotations = "org.Mm.eg.db")
 {
-  require(topGO) 
-  require(tidyverse)
+  library(topGO) 
+  library(tidyverse)
   
   #define universe as all detected genes in dataset
   all_counts = counts(deseq_object, normalized = T)
