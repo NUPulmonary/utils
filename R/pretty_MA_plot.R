@@ -39,8 +39,8 @@ pretty_MA_plot = function(results,
   #add colors for significant
   results = results %>% 
     mutate(color = factor(case_when(padj >= 0.05 ~ "NS",
-                                    padj < 0.05 & log2FoldChange >= lfc_threshold ~ "upregulated",
-                                    padj < 0.05 & log2FoldChange <= -lfc_threshold ~ "downregulated")))
+                                    padj < 0.05 & log2FoldChange > 0 ~ "upregulated",
+                                    padj < 0.05 & log2FoldChange < 0 ~ "downregulated")))
   
   plt = ggplot(results, 
                aes(x = baseMean, y = log2FoldChange)) +
