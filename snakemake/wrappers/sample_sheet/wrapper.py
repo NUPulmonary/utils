@@ -17,7 +17,7 @@ columns = ["Lane", "Sample", "Index"]
 full_columns = pd.Series(["RunID"] + columns)
 missing_columns = full_columns[~full_columns.isin(samples.columns)].values
 
-if missing_columns:
+if missing_columns.size > 0:
     raise ValueError(f"Could not find columns {', '.join(missing_columns)} in {input}")
 
 samples = samples.loc[samples.RunID == run_id, columns]
