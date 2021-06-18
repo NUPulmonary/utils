@@ -10,6 +10,7 @@ input = snakemake.input
 output = snakemake.output
 run_id = snakemake.wildcards.get("run_id", None)
 cellranger_dir = snakemake.params.get("cellranger_dir", "")
+keep_output = snakemake.params.get("keep_cellranger_output", False)
 
 assert len(input) == 2, "expecting 2 inputs: bcl directory and sample sheet"
 assert run_id is not None, "run_id is a required wildcard"
@@ -22,11 +23,24 @@ if cellranger_dir == "":
 else:
     cellranger_dir += "/bin/"
 
+rm_output = ""
+if not keep_output:
+    rm_output = "rm -rf {flowcell}\nrm -f __{flowcell}.mro"
+
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
 
+# check if this is MiniSeq and we need to set rc-i2-override
+# because mkfastq does not set it
+rc_i2_override=""
+for l in open(os.path.join(input[0], "RunParameters.xml")):
+    if "ApplicationName" in l:
+        if "MiniSeq" in l:
+            rc_i2_override="--rc-i2-override=true"
+        break
+
+
 # TODO: account for lanes
-# TODO: check rc-i2-override
 
 shell(
     """
@@ -36,10 +50,9 @@ shell(
 
     {cellranger_dir}cellranger mkfastq --run="{input[0]}" \
         --csv="{input[1]}" \
-        --rc-i2-override=true \
+        {rc_i2_override} \
         --output-dir="{output[0]}" {log}
 
-    rm -rf {flowcell}
-    rm __{flowcell}.mro
+    {rm_output}
     """
 )
