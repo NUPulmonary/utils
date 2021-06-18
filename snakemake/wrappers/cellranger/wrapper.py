@@ -11,9 +11,11 @@ output = snakemake.output
 cellranger_dir = snakemake.params.get("cellranger_dir", "")
 transcriptome = snakemake.params.get("transcriptome", None)
 chemistry = snakemake.params.get("chemistry", None)
+sample = snakemake.wildcards.get("sample", None)
 
 assert transcriptome is not None, "param transcriptome is required"
 assert chemistry is not None, "param chemistry is required"
+assert sample is not None, "sample wildcard is required"
 
 input_paths = ",".join([os.path.realpath(i) for i in input])
 
@@ -31,10 +33,14 @@ shell(
     module purge all
     {load_cellranger}
 
-    {cellranger_dir}cellranger count --id {wildcards.sample} \
-        --sample={wildcards.sample} \
-        --transcriptome={params.transcriptome} \
-        --fastqs={params.input_paths} \
-        --chemistry={params.chemistry} {log}
+    outdir=`dirname "{output[0]}"`
+    mkdir -p "$outdir"
+    cd "$outdir"
+
+    {cellranger_dir}cellranger count --id {sample} \
+        --sample={sample} \
+        --transcriptome={transcriptome} \
+        --fastqs={input_paths} \
+        --chemistry={chemistry} {log}
     """
 )
