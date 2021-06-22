@@ -25,7 +25,7 @@ else:
 
 rm_output = ""
 if not keep_output:
-    rm_output = "rm -rf {flowcell}\nrm -f __{flowcell}.mro"
+    rm_output = f"rm -rf {flowcell}\nrm -f __{flowcell}.mro"
 
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
@@ -41,12 +41,19 @@ for l in open(os.path.join(input[0], "RunParameters.xml")):
 
 
 # TODO: account for lanes
+# TODO: merge lanes
 
 shell(
     """
     module purge all
     module load bcl2fastq/2.19.1
     {load_cellranger}
+
+    if [[ -d {flowcell} ]]; then
+        echo "{flowcell} directory exists, removing it"
+        rm -rf {flowcell}
+        rm -f __{flowcell}.mro
+    fi
 
     {cellranger_dir}cellranger mkfastq --run="{input[0]}" \
         --csv="{input[1]}" \
