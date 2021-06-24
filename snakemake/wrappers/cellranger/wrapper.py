@@ -15,6 +15,7 @@ cellranger_dir = snakemake.params.get("cellranger_dir", "")
 transcriptome = snakemake.params.get("transcriptome", None)
 chemistry = snakemake.params.get("chemistry", None)
 sample = snakemake.wildcards.get("sample", None)
+skip_sample = snakemake.params.get("skip_sample", False)
 
 input_fastq_type = snakemake.params.get("input_fastq_type", "gex")
 gex_fastqs = snakemake.params.get("gex_fastqs", None)
@@ -59,7 +60,8 @@ lib_msg = ""
 if mode == "gex":
     input_paths = ",".join(input_paths)
     input_arg = f"--fastqs={input_paths}"
-    sample_arg = f"--sample={sample}"
+    if not skip_sample:
+        sample_arg = f"--sample={sample}"
 
 if mode == "gex+antibody":
     antibodies = os.path.realpath(antibodies)
