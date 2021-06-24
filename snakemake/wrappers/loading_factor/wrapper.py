@@ -8,9 +8,11 @@ import pandas as pd
 
 input = snakemake.input
 output = snakemake.output
+field = snakemake.params.get("field", "Mean Reads per Cell")
 
 data = pd.read_csv(input[0])
-data = data.iloc[:, :4]
-depth = data["Mean Reads per Cell"]
-data["Loading factor"] = depth.max() / depth
-data.to_csv(output[0], index=False)
+lf_data = data.iloc[:, :2]
+lf_data[field] = data[field]
+depth = data[field]
+lf_data["Loading factor"] = depth.max() / depth
+lf_data.to_csv(output[0], index=False)
