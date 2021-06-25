@@ -99,11 +99,7 @@ def integrate_scvi(
     sc.tl.leiden(ds, resolution=resolution)
     sc.tl.umap(ds)
 
-    # Copy normalized counts to the dataset and put them to raw for export
-    ds.X = vae.get_normalized_expression(
-        library_size=10e4
-    )
-    sc.pp.log1p(ds)
+    # Copy raw counts to the dataset and put them to raw for export
     ds.raw = ds
 
     # Compute markers with scVI
