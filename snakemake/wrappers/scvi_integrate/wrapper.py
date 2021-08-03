@@ -17,12 +17,13 @@ os.environ["SLURM_JOB_NAME"] = "bash"
 input = snakemake.input
 output = snakemake.output
 params = snakemake.params
-batch_key = params.get("batch_key", None)
+batch_key = params.get("batch_key")
 covariates = params.get("covariates", [])
-resolution = params.get("resolution", None)
-model_path = params.get("model_path", None)
+resolution = params.get("resolution")
+model_path = params.get("model_path")
 n_latent = params.get("n_latent", 50)
 scvi_kwargs = params.get("scvi_kwargs", {})
+n_hvg = params.get("n_hvg")
 
 assert len(input) == 1, "Expect single input of samples_meta csv file"
 assert hasattr(output, "h5ad"), "Output should have `h5ad' field with path to h5ad file to save"
@@ -42,4 +43,5 @@ integrate.integrate_scvi(
     model_path=model_path,
     n_latent=n_latent,
     scvi_kwargs=scvi_kwargs,
+    n_hvg=n_hvg,
 )

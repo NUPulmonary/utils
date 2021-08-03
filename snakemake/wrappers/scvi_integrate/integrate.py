@@ -53,7 +53,8 @@ def integrate_scvi(
     max_epochs=400,
     model_path=None,
     resolution=0.5,
-    scvi_kwargs=None
+    scvi_kwargs=None,
+    n_hvg=None,
 ):
     if batch_key is None:
         raise ValueError("Please provide a batch_key")
@@ -85,6 +86,16 @@ def integrate_scvi(
     ds.obs[batch_key] = ds.obs[batch_key].astype(str)
     for k in covariates:
         ds.obs[k] = ds.obs[k].astype(str)
+
+    if n_hvg is not None:
+        sc.pp.highly_variable_genes(
+            ds,
+            n_top_genes=n_hvg,
+            subset=True,
+            layer="counts",
+            flavor="seurat_v3",
+            batch_key=batch_key,
+        )
 
     # Setup and train scVI model
     scvi.data.setup_anndata(ds, layer="counts", batch_key=batch_key, categorical_covariate_keys=covariates)
