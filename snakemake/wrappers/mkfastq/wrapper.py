@@ -10,6 +10,7 @@ input = snakemake.input
 output = snakemake.output
 run_id = snakemake.wildcards.get("run_id", None)
 cellranger_dir = snakemake.params.get("cellranger_dir", "")
+rc_i2_override = snakemake.params.get("r2_i2_override", None)
 keep_output = snakemake.params.get("keep_cellranger_output", False)
 
 assert len(input) == 2, "expecting 2 inputs: bcl directory and sample sheet"
@@ -32,12 +33,15 @@ log = snakemake.log_fmt_shell(stdout=True, stderr=True)
 
 # check if this is MiniSeq and we need to set rc-i2-override
 # because mkfastq does not set it
-rc_i2_override=""
-for l in open(os.path.join(input[0], "RunParameters.xml")):
-    if "ApplicationName" in l:
-        if "MiniSeq" in l:
-            rc_i2_override="--rc-i2-override=true"
-        break
+if rc_i2_override is None:
+    rc_i2_override=""
+    for l in open(os.path.join(input[0], "RunParameters.xml")):
+        if "ApplicationName" in l:
+            if "MiniSeq" in l:
+                rc_i2_override="--rc-i2-override=true"
+            break
+else:
+    rc_i2_override=f"--rc-i2-override={rc_i2_override}"
 
 
 # TODO: account for lanes
