@@ -21,6 +21,8 @@ assert len(output) == 1, "Expect single output with tar.gz file"
 
 assert sample is not None, "sample wildcard is required"
 
+cluster_field = params.get("cluster_field", "leiden")
+
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
 
@@ -45,6 +47,8 @@ shell(
 
     echo "Sedding " "$out_dir/cellbrowser.conf"
     sed -i 's/louvain/leiden/g' "$out_dir/cellbrowser.conf"
+    sed -i "s/defColorField='leiden'/defColorField='{cluster_field}'/" "$out_dir/cellbrowser.conf"
+    sed -i "s/labelField='leiden'/labelField='{cluster_field}'/" "$out_dir/cellbrowser.conf"
     sed -i 's/#radius=2/radius=2/' "$out_dir/cellbrowser.conf"
     sed -i "s/meta.tsv/$meta_file/" "$out_dir/cellbrowser.conf"
     sed -i -z 's/ \+{{\\n \+"file": "scVI_coords.tsv"[^}}]\+}},\\n//' "$out_dir/cellbrowser.conf"

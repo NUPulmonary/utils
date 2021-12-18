@@ -1,16 +1,20 @@
-# script based on the GO enrichment analysis in k_means_figure
-# To get GO enrichment of a set of genes of interest based on universe of all expressed genes in dataset   
-# Rogan Grant 2021-04-14   
+#' Identify GO enrichment of a list of gene hits
+#' 
+#' Script based on the GO enrichment analysis in k_means_figure
+#' To get GO enrichment of a set of genes of interest based on universe of all expressed genes in dataset
+#' Rogan Grant 2021-04-14 - 2021-12-16 
+#' 
+#' @param deseq_object a DESeq2 object with library normalization pre-calculated using DESeq(), vst(), etc
+#' @param goi vector genes of interest in ensembl gene ID format
+#' @param go_annotations R package with ensembl:GO annotations (defaults to mouse)
+#' @param return_fold_enrichment whether or not to return enrichment data for each GO hit. Defaults to FALSE for backwards compatibility.
+#' @return a dataframe containing the significantly enriched GO terms and enrichment scores if requested
+#' @export
 
-# Parameters
-# deseq_object: a DESeq2 object with library normalization pre-calculated using DESeq(), vst(), etc
-# goi: vector genes of interest in ensembl gene ID format
-# go_annotations: R package with ensembl:GO annotations (defaults to mouse)
-
-# Returns a data frame with go terms and adjusted p-values
 go_enrichment = function(deseq_object,
                          goi,
-                         go_annotations = "org.Mm.eg.db")
+                         go_annotations = "org.Mm.eg.db",
+                         return_fold_enrichment = FALSE)
 {
   library(topGO) 
   library(tidyverse)
@@ -34,12 +38,28 @@ go_enrichment = function(deseq_object,
   
   #run Fisher test
   test_results = getSigGroups(go_data, fisherTest)
-  score = as.data.frame(score(test_results))
-  colnames(score) = "pval"
-  score = rownames_to_column(score, var = "go_id") %>% 
-    dplyr::mutate(padj = p.adjust(pval, method = "fdr")) %>% 
-    dplyr::filter(padj < 0.05) %>% 
-    dplyr::arrange(padj)
+  if(return_fold_enrichment == TRUE)
+  {
+    score = GenTable(go_data, 
+                     pval = test_results, 
+                     orderBy = "pval", 
+                     topNodes = length(test_results@score)) %>%  #generally just want all filtered terms; Inf returns error
+      dplyr::rename(go_id = GO.ID,
+                    description = Term) %>% 
+      mutate(padj = p.adjust(pval, method = "fdr"),
+             fold_enrichment = Significant / Expected,
+             term_coverage = Significant / Annotated,
+             full_go = paste(go_id, description)) %>% #
+      dplyr::filter(padj < 0.05)
+  } else
+  {
+    score = as.data.frame(score(test_results))
+    colnames(score) = "pval"
+    score = rownames_to_column(score, var = "go_id") %>% 
+      dplyr::mutate(padj = p.adjust(pval, method = "fdr")) %>% 
+      dplyr::filter(padj < 0.05) %>% 
+      dplyr::arrange(padj)
+  }
   
   #in case of no significant go terms, return NULL
   if(nrow(score) == 0)

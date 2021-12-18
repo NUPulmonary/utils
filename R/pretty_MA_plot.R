@@ -18,7 +18,9 @@ pretty_MA_plot = function(results,
                           name_col = "row.names",
                           lfc_threshold = 0,
                           genes = NULL,
-                          custom_annotation = NULL)
+                          custom_annotation = NULL,
+                          max_overlaps = 10,
+                          label_alpha = 1)
 {
   require(ggplot2)
   require(ggrepel)
@@ -56,12 +58,12 @@ pretty_MA_plot = function(results,
   if(is.null(genes))
   {
     plt = plt + geom_label_repel(data = subset(results, padj < 0.05 & abs(log2FoldChange) >= lfc_threshold),
-                     aes_string(label = name_col))
+                     aes_string(label = name_col), max.overlaps = max_overlaps, fill = alpha(c("white"), label_alpha))
   } else
   {
     plt = plt + geom_label_repel(data = subset(results, external_gene_name %in% genes),
                                  aes_string(label = name_col),
-                                 min.segment.length = 0.1)
+                                 min.segment.length = 0.1, max.overlaps = max_overlaps, fill = alpha(c("white"), label_alpha))
   }
                                  
   
