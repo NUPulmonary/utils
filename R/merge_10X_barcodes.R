@@ -44,7 +44,7 @@ merge_10X_barcodes = function(input_dirs,
   }
   
   #ensure all of the paths are valid
-  all_files = as.vector(identity_table)
+  all_files = as.character(na.omit(as.vector(identity_table)))
   valid_vector = vapply(all_files, file.exists, FUN.VALUE = TRUE)
   if(any(valid_vector == FALSE))
   {
@@ -56,7 +56,7 @@ merge_10X_barcodes = function(input_dirs,
   #if all is well, merge the TSVs and export
   for(i in 1:nrow(identity_table))
   {
-    files_vector = identity_table[i, ]
+    files_vector = as.character(na.omit(identity_table[i, ]))
     sample = rownames(identity_table)[i]
     barcodes = lapply(files_vector, function(x){
       #one column, so read as a vector for now
@@ -64,6 +64,7 @@ merge_10X_barcodes = function(input_dirs,
     #join together and keep all unique
     barcodes = unique(unlist(barcodes))
     #now write back to a TSV
+    message(paste0("Merging sample ", sample))
     out_path = paste0(output_dir, "/", sample, "_barcodes.tsv")
     write.table(barcodes, file = out_path, row.names = F, col.names = F,  sep = "\t", quote = F)
     #gzip using bash
