@@ -17,7 +17,7 @@ rule all:
 
 rule sample_sheet:
     input: SAMPLE_CSV_PATH
-    output: f"{DATA_DIR}/{{run_id,\w+}}.csv"
+    output: f"{DATA_DIR}/{{run_id}}/{{run_id,\w+}}.csv"
     params:
         slurm__skip=True
     wrapper:
