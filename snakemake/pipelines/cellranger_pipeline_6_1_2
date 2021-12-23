@@ -14,34 +14,13 @@ rule all:
     input:
         f"{DATA_DIR}/cellranger/metrics_summary.csv",
 
-
-rule metrics_summary:
-    input:
-        expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
-    output: "{dir}/cellranger/metrics_summary.csv"
+rule sample_sheet:
+    input: SAMPLE_CSV_PATH
+    output: f"{DATA_DIR}/{{run_id,\w+}}.csv"
     params:
         slurm__skip=True
     wrapper:
-        f"file://{WRAPPER_DIR}/metrics_summary"
-
-
-rule cellranger:
-    input: 
-        lambda x: [f"{DATA_DIR}/fastq-run/{r}" for r in SAMPLES.RunID[SAMPLES.Sample == x.sample].values]
-    output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
-    params:
-        slurm__account="b1042",
-        slurm__partition="genomics",
-        slurm__cores=8,
-        slurm__hours=16,
-        slurm__mem=60
-        chemistry="auto",
-        transcriptome=TRANSCRIPTOME,
-        cellranger_dir=CELLRANGER_PATH,
-        sample_csv_path = SAMPLE_CSV_PATH
-    wrapper:
-        f"file://{WRAPPER_DIR}/cellranger"
-
+        f"file://{WRAPPER_DIR}/sample_sheet"
 
 rule demultiplex:
     input:
@@ -59,11 +38,27 @@ rule demultiplex:
     wrapper:
         f"file://{WRAPPER_DIR}/mkfastq"
 
+rule cellranger:
+    input: 
+        lambda x: [f"{DATA_DIR}/fastq-run/{r}" for r in SAMPLES.RunID[SAMPLES.Sample == x.sample].values]
+    output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
+    params:
+        slurm__account="b1042",
+        slurm__partition="genomics",
+        slurm__cores=8,
+        slurm__hours=16,
+        slurm__mem=60,
+        chemistry="auto",
+        transcriptome=TRANSCRIPTOME,
+        cellranger_dir=CELLRANGER_PATH,
+        sample_csv_path = SAMPLE_CSV_PATH
+    wrapper:
+        f"file://{WRAPPER_DIR}/cellranger"
 
-rule sample_sheet:
-    input: SAMPLE_CSV_PATH
-    output: f"{DATA_DIR}/{{run_id,\w+}}.csv"
+rule metrics_summary:
+    input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
+    output: "{dir}/cellranger/metrics_summary.csv"
     params:
         slurm__skip=True
     wrapper:
-        f"file://{WRAPPER_DIR}/sample_sheet"
+        f"file://{WRAPPER_DIR}/metrics_summary"
