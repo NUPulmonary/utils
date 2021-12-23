@@ -6,7 +6,7 @@ WRAPPER_DIR = "/projects/b1038/Pulmonary/nmarkov/utils/snakemake/wrappers"
 DATA_DIR =  config['data_dir'] 
 SAMPLE_CSV_PATH = config['sample_csv_path'] 
 TRANSCRIPTOME = config['transcriptome']
-CELLRANGER_PATH = config['cellranger_PATH']
+CELLRANGER_PATH = config['cellranger_path']
 SAMPLES = pd.read_csv(SAMPLE_CSV_PATH)
 
 
