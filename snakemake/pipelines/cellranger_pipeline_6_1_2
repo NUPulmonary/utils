@@ -6,7 +6,7 @@ WRAPPER_DIR = "/projects/b1038/Pulmonary/nmarkov/utils/snakemake/wrappers"
 DATA_DIR =  config['data_dir'] 
 SAMPLE_CSV_PATH = config['sample_csv_path'] 
 TRANSCRIPTOME = config['transcriptome']
-CELLRANGER_DIR = config['cellranger_dir']
+CELLRANGER_PATH = config['cellranger_PATH']
 SAMPLES = pd.read_csv(SAMPLE_CSV_PATH)
 
 
@@ -37,7 +37,7 @@ rule cellranger:
         slurm__mem=60
         chemistry="auto",
         transcriptome=TRANSCRIPTOME,
-        cellranger_dir=CELLRANGER_DIR,
+        cellranger_dir=CELLRANGER_PATH,
         sample_csv_path = SAMPLE_CSV_PATH
     wrapper:
         f"file://{WRAPPER_DIR}/cellranger"
@@ -54,7 +54,7 @@ rule demultiplex:
         slurm__cores=4,
         slurm__hours=2,
         slurm__mem=40,
-        cellranger_dir=CELLRANGER_DIR,
+        cellranger_dir=CELLRANGER_PATH,
         keep_cellranger_output=True,
     wrapper:
         f"file://{WRAPPER_DIR}/mkfastq"
