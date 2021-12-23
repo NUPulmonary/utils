@@ -4,6 +4,7 @@ __license__ = "MIT"
 
 
 import pandas as pd
+import warnings
 
 input = snakemake.input
 output = snakemake.output
@@ -12,6 +13,12 @@ samples = pd.read_csv(input[0])
 
 if run_id is None:
     raise ValueError("Expect run_id wildcard in output path")
+
+#if no cell numbers are specified, default to 3000 to match cellranger defaults
+#keeps backward compatibility with old versions as well
+if "Expected" not in samples.columns:
+    warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")
+    samples['Expected'] = 3000
 
 columns = ["Lane", "Sample", "Index"]
 full_columns = pd.Series(["RunID"] + columns)

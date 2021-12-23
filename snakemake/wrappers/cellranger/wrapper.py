@@ -5,7 +5,7 @@ __license__ = "MIT"
 
 import os
 import tempfile
-
+import warnings
 import pandas as pd
 from snakemake.shell import shell
 
@@ -16,10 +16,20 @@ transcriptome = snakemake.params.get("transcriptome", None)
 chemistry = snakemake.params.get("chemistry", None)
 sample = snakemake.wildcards.get("sample", None)
 skip_sample = snakemake.params.get("skip_sample", False)
+sample_csv_path = snakemake.params.get("sample_csv_path", "")
 
 input_fastq_type = snakemake.params.get("input_fastq_type", "gex")
 gex_fastqs = snakemake.params.get("gex_fastqs", None)
 antibodies = snakemake.params.get("antibodies", None)
+
+#handle expected cells
+#if no cell numbers are specified, default to 3000 to match cellranger defaults
+#keeps backward compatibility with old versions as well
+samples = pd.read_csv(sample_csv_path)
+if "Expected" not in samples.columns:
+    warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")
+    samples['Expected'] = 3000
+expected_cells = samples[samples.Sample == sample, 'Expected']
 
 # mode of count operation
 # gex
