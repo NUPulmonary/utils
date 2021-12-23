@@ -1,15 +1,13 @@
 import pandas as pd
-
+import os
 
 WRAPPER_DIR = "/projects/b1038/Pulmonary/nmarkov/utils/snakemake/wrappers"
-
-WORK_DIR = config['work_dir']
-DATA_DIR = f"{WORK_DIR}/data"
+DATA_DIR = config['data_dir']
 SAMPLE_CSV_PATH = config['sample_csv_path'] 
 TRANSCRIPTOME = config['transcriptome']
 CELLRANGER_PATH = config['cellranger_path']
 SAMPLES = pd.read_csv(SAMPLE_CSV_PATH)
-
+os.chdir(DATA_DIR)
 
 rule all:
     input:
@@ -17,7 +15,7 @@ rule all:
 
 rule sample_sheet:
     input: SAMPLE_CSV_PATH
-    output: f"{DATA_DIR}/{{run}}/{{run_id,\w+}}.csv"
+    output: f"{DATA_DIR}/{{run_id,\w+}}.csv"
     params:
         slurm__skip=True
     wrapper:
@@ -25,9 +23,9 @@ rule sample_sheet:
 
 rule demultiplex:
     input:
-        f"{WORK_DIR}/raw/{{run_id}}",
-        f"{DATA_DIR}/{{run}}/{{run_id,\w+}}.csv"
-    output: directory("{DATA_DIR}/fastq-run/{run_id}")
+        "../../raw/{run_id}",
+        "{dir}/{run_id,\w+}.csv"
+    output: directory("{dir}/fastq-run/{run_id}")
     params:
         slurm__account="b1042",
         slurm__partition="genomics",
@@ -57,8 +55,8 @@ rule cellranger:
         f"file://{WRAPPER_DIR}/cellranger"
 
 rule metrics_summary:
-    input: expand("{{DATA_DIR}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
-    output: "{DATA_DIR}/cellranger/metrics_summary.csv"
+    input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
+    output: "{dir}/cellranger/metrics_summary.csv"
     params:
         slurm__skip=True
     wrapper:
