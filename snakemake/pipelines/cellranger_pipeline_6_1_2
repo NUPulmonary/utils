@@ -17,7 +17,7 @@ rule all:
 
 rule sample_sheet:
     input: SAMPLE_CSV_PATH
-    output: f"{DATA_DIR}/{{run_id}}/{{run_id,\w+}}.csv"
+    output: f"{DATA_DIR}/{{run}}/{{run_id,\w+}}.csv"
     params:
         slurm__skip=True
     wrapper:
@@ -26,7 +26,7 @@ rule sample_sheet:
 rule demultiplex:
     input:
         f"{WORK_DIR}/raw/{{run_id}}",
-        f"{DATA_DIR}/{{run_id}}/{{run_id,\w+}}.csv"
+        f"{DATA_DIR}/{{run}}/{{run_id,\w+}}.csv"
     output: directory("{DATA_DIR}/fastq-run/{run_id}")
     params:
         slurm__account="b1042",
