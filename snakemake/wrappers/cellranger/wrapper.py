@@ -24,7 +24,7 @@ antibodies = snakemake.params.get("antibodies", None)
 
 #handle expected cells
 #if no cell numbers are specified, default to 3000 to match cellranger defaults
-#keeps backward compatibility with old versions as well
+#keeps backward compatibility with old versions as well (to any version that accepts --expected-cells flag)
 samples = pd.read_csv(sample_csv_path)
 if "Expected" not in samples.columns:
     warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")

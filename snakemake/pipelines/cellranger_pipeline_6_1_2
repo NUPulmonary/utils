@@ -2,6 +2,7 @@ import pandas as pd
 import os
 
 WRAPPER_DIR = "/projects/b1038/Pulmonary/nmarkov/utils/snakemake/wrappers"
+#receive command-line inputs using the --config flag
 DATA_DIR = config['data_dir']
 SAMPLE_CSV_PATH = config['sample_csv_path'] 
 TRANSCRIPTOME = config['transcriptome']
