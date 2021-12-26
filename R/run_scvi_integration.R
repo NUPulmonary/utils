@@ -42,7 +42,7 @@ run_SCVI_integration = function(object,
   
   #import python packages
   sc = import('scanpy', convert = FALSE)
-  scvi = import('scvi-tools', convert = FALSE)
+  scvi = import('scvi', convert = FALSE)
   
   scvi$settings$progress_bar_style = 'tqdm'
   
