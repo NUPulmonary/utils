@@ -9,7 +9,7 @@
 #' @return a Seurat object with new embeddings in the "SCVI" slot
 #' @export
 #' 
-run_scvi_integration = function(object, 
+run_SCVI_integration = function(object, 
                                 python_path = NA,
                                 batch_col = "orig.ident",
                                 RDS_path = NA,
