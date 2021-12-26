@@ -2,6 +2,7 @@
 #' 
 #' @param object Seurat object after variable gene selection and normalization. Can be object itself or path to an RDS file. Note: raw gene counts are used in either case.
 #' @param python_path path to desired python version for reticulate setup
+#' @param project_path path to project directory for loading R environment. If NA, does not use renv.
 #' @param batch_col name of metadata column specifying batch. Defaults to orig.ident, where each sample is its own batch.
 #' @param RDS_path location to save RDS package. Ignored if save_RDS is FALSE.
 #' @param use_GPU toggle to true for running on GPU
@@ -11,10 +12,23 @@
 #' 
 run_SCVI_integration = function(object, 
                                 python_path = NA,
+                                project_path = NA,
                                 batch_col = "orig.ident",
                                 RDS_path = NA,
                                 use_GPU = FALSE)
 {
+  #if required, set up R environment
+  if(!is.na(project_path))
+  {
+    #need renv installed outside of project folder for this to work
+    if(!("renv" %in% installed.packages()))
+    {
+      install.packages("renv")
+    }
+    require(renv)
+    renv::load(project_path)
+  }
+  
   require(Seurat)
   require(sceasy)
   
