@@ -66,7 +66,7 @@ run_SCVI_integration = function(object,
   model = scvi$model$SCVI(annData)
   
   # train the model
-  model$train(use_gpu = useGPU)
+  model$train(use_gpu = use_GPU)
   
   #get latent representation and place back into Seurat object
   latent = model$get_latent_representation()
