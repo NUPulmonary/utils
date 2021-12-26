@@ -3,7 +3,6 @@
 #' @param object Seurat object after variable gene selection and normalization. Can be object itself or path to an RDS file. Note: raw gene counts are used in either case.
 #' @param python_path path to desired python version for reticulate setup
 #' @param batch_col name of metadata column specifying batch. Defaults to orig.ident, where each sample is its own batch.
-#' @param save_RDS boolean to save an RDS object of the final output. Defaults to FALSE.
 #' @param RDS_path location to save RDS package. Ignored if save_RDS is FALSE.
 #' @param use_GPU toggle to true for running on GPU
 #' 
@@ -13,7 +12,6 @@
 run_scvi_integration = function(object, 
                                 python_path = NA,
                                 batch_col = "orig.ident",
-                                save_RDS = FALSE, 
                                 RDS_path = NA,
                                 use_GPU = FALSE)
 {
@@ -63,7 +61,7 @@ run_scvi_integration = function(object,
   object[["SCVI"]] = CreateDimReducObject(embeddings = latent, key = "SCVI_", assay = DefaultAssay(object))
   
   #finally, return as necessary
-  if(save_RDS)
+  if(!is.na(RDS_path))
   {
     saveRDS(object, RDS_path)
   }
