@@ -52,14 +52,12 @@ run_SCVI_integration = function(object,
     object = readRDS(object)
   }
   
-  #get variable features in case SCT was used
-  object = FindVariableFeatures(object, selection.method = "vst", nfeatures = 3000)
+  #get variable features (assume already calculated with method of choice)
   top3k = head(VariableFeatures(object), 3000)
-  object = object[top3k]
+  object_scvi = object[top3k, ]
   
   #convert to annData object
-  annData = convertFormat(object, from="seurat", to="anndata", main_layer="counts", drop_single_values=FALSE)
-  #filter empty cells
+  annData = convertFormat(object_scvi, from="seurat", to="anndata", main_layer="counts", drop_single_values=FALSE)
   
   #create model
   scvi$model$SCVI$setup_anndata(annData, batch_key = batch_col)
