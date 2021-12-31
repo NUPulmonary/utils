@@ -16,6 +16,7 @@ run_SCVI_integration = function(object,
                                 project_path = NA,
                                 random_seed = 12345,
                                 batch_col = "orig.ident",
+                                n_epochs = NA,
                                 RDS_path = NA,
                                 use_GPU = FALSE)
 {
@@ -70,8 +71,17 @@ run_SCVI_integration = function(object,
   scvi$model$SCVI$setup_anndata(annData, batch_key = batch_col)
   model = scvi$model$SCVI(annData)
   
+  #if supplied, set number of epochs
+  
+  
   # train the model
-  model$train(use_gpu = use_GPU)
+  if(is.na(n_epochs))
+  {
+    model$train(use_gpu = use_GPU)
+  } else
+  {
+    model$train(use_gpu = use_GPU, max_epochs = as.integer(n_epochs))
+  }
   
   #get latent representation and place back into Seurat object
   latent = model$get_latent_representation()
