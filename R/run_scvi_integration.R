@@ -2,6 +2,7 @@
 #' 
 #' @param object Seurat object after variable gene selection and normalization. Can be object itself or path to an RDS file. Note: raw gene counts are used in either case.
 #' @param python_path path to desired python version for reticulate setup
+#' @param random_seed random seed for SCVI
 #' @param project_path path to project directory for loading R environment. If NA, does not use renv.
 #' @param batch_col name of metadata column specifying batch. Defaults to orig.ident, where each sample is its own batch.
 #' @param RDS_path location to save RDS package. Ignored if save_RDS is FALSE.
@@ -13,6 +14,7 @@
 run_SCVI_integration = function(object, 
                                 python_path = NA,
                                 project_path = NA,
+                                random_seed = 12345,
                                 batch_col = "orig.ident",
                                 RDS_path = NA,
                                 use_GPU = FALSE)
@@ -45,6 +47,7 @@ run_SCVI_integration = function(object,
   scvi = import('scvi', convert = FALSE)
   
   scvi$settings$progress_bar_style = 'tqdm'
+  scvi$settings$seed = as.integer(random_seed) #causes scvi error unless cast
   
   #if filepath is given as input, load as an RDS file
   if(class(object) == "character")
@@ -57,7 +60,11 @@ run_SCVI_integration = function(object,
   object_scvi = object[top3k, ]
   
   #convert to annData object
-  annData = convertFormat(object_scvi, from="seurat", to="anndata", main_layer="counts", drop_single_values=FALSE)
+  annData = convertFormat(object_scvi, 
+                          from="seurat", 
+                          to="anndata", 
+                          main_layer="counts", 
+                          drop_single_values=FALSE)
   
   #create model
   scvi$model$SCVI$setup_anndata(annData, batch_key = batch_col)
