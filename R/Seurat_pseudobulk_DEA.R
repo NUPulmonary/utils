@@ -15,7 +15,9 @@ bulkDEA = function(object, #seurat object
                    outPrefix, #file prefix for results files
                    minCells = 50, #whether or not to override the minimum number of cells/samples
                    cores = 1, #cores to run in parallel
-                   fit_type = "parametric") #to control dispersion fitting
+                   fit_type = "parametric", #to control dispersion fitting
+                   genomePrefix = NA, # regular expression of genome prefixe(s) on gene names for removal and better binding downstream
+                   cellMappings = NULL) #optional data frame to redefine samples from individual cell IDs rather than just prefix. Rownames are cell IDs.
 {
    require(Seurat)
    require(DESeq2)
@@ -36,7 +38,15 @@ bulkDEA = function(object, #seurat object
    
    # keep track of number of samples per condition
    completeMetadata = metaData
-   allSamples = sort(unique(substr(rownames(object@meta.data), 1, (regexpr("\\_+[ATCG]", rownames(object@meta.data)) - 1))))
+   
+   #handle sample IDs
+   if(is.null(cellMappings))
+   {
+     allSamples = sort(unique(substr(rownames(object@meta.data), 1, (regexpr("\\_+[ATCG]", rownames(object@meta.data)) - 1))))
+   } else
+   {
+     allSamples = unique(cellMappings[, 1])
+   }
    sampleData = matrix(nrow = 0, ncol = (length(allSamples) + 1)) # keeps track of number of cells per condition
    sampleDataCols = c("cellType", paste0("Ncells_", allSamples))
    colnames(sampleData) = sampleDataCols
@@ -63,7 +73,14 @@ bulkDEA = function(object, #seurat object
       sd = cell
       for(sample in allSamples) #get number of cells for each (zero therefore means not present)
       {
-            sd = c(sd, sum(grepl(sample, colnames(cellSub))))
+        if(is.null(cellMappings))
+        {
+          sd = c(sd, sum(grepl(sample, colnames(cellSub))))
+        } else
+        {
+          sampleCells = colnames(cellSub[, cellSub$sample == sample])
+          sd = c(sd, sum(colnames(cellSub) %in% sampleCells))
+        }
       }
       samples = allSamples[as.numeric(sd[2:length(sd)]) >= minCells] # need at least 50 cells to get a real picture
       sampleData$cellType = as.character(sampleData$cellType)
@@ -102,7 +119,14 @@ bulkDEA = function(object, #seurat object
       colnames(joinedMat) = samples
       for(sample in samples)
       {
-         sampleMat = counts[ , grepl(sample, colnames(counts))]
+        if(is.null(cellMappings))
+        {
+          sampleMat = counts[ , grepl(sample, colnames(counts))]
+        } else
+        {
+          sampleCells = colnames(cellSub[, cellSub$sample == sample])
+          sampleMat = counts[, sampleCells]
+        }
          sampleCounts = rowSums(sampleMat)
          joinedMat[, sample] = sampleCounts
       }
@@ -119,8 +143,12 @@ bulkDEA = function(object, #seurat object
       allComps = lapply(allComps, as.character) #otherwise we get factor levels!
       for(comp in allComps)
       {
-         res = as.data.frame(results(dge, contrast = c(colnames(metaData)[1], comp[1], comp[2]), alpha = 0.05))
+         res = as.data.frame(results(dge, contrast = c(colnames(metaData)[1], comp[1], comp[2]), alpha = 0.05, parallel = T))
          res = rownames_to_column(res, var = geneVar)
+         if(!is.null(genomePrefix) && geneVar == "external_gene_name")
+         {
+           res[, geneVar] = gsub(genomePrefix, "", res[, geneVar])
+         }
          if(geneVar == "ensembl_gene_id")
          {
             res$ensembl_gene_id = ifelse(grepl("\\.", res$ensembl_gene_id),
