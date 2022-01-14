@@ -78,8 +78,7 @@ bulkDEA = function(object, #seurat object
           sd = c(sd, sum(grepl(sample, colnames(cellSub))))
         } else
         {
-          sampleCells = colnames(cellSub[, cellSub$sample == sample])
-          sd = c(sd, sum(colnames(cellSub) %in% sampleCells))
+          sd = c(sd, sum(cellSub@meta.data[, colnames(cellMappings)[1]] == sample))
         }
       }
       samples = allSamples[as.numeric(sd[2:length(sd)]) >= minCells] # need at least 50 cells to get a real picture
@@ -124,7 +123,7 @@ bulkDEA = function(object, #seurat object
           sampleMat = counts[ , grepl(sample, colnames(counts))]
         } else
         {
-          sampleCells = colnames(cellSub[, cellSub$sample == sample])
+          sampleCells = colnames(cellSub)[cellSub@meta.data[, colnames(cellMappings)[1]] == sample]
           sampleMat = counts[, sampleCells]
         }
          sampleCounts = rowSums(sampleMat)
