@@ -53,7 +53,7 @@ bulkDEA = function(object, #seurat object
    sampleData = as.data.frame(sampleData)
    
    bulkSampleData = matrix(nrow = 0, ncol = (length(unique(metaData[ , 1])) + 1)) #keep track of number of biological replicates per condition
-   bulkSampleDataCols = c("cellType", paste0("Nsamples_", sort(unique(metaData[ , 1]))))
+   bulkSampleDataCols = c("cellType", paste0("Nsamples_", sort(unique(as.character(metaData[ , 1])))))
    colnames(bulkSampleData) = bulkSampleDataCols
    bulkSampleData = as.data.frame(bulkSampleData)
    
