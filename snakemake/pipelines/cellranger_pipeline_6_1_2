@@ -25,8 +25,8 @@ rule sample_sheet:
 rule demultiplex:
     input:
         "../../raw/{run_id}",
-        "{dir}/{run_id,\w+}.csv"
-    output: directory("{dir}/fastq-run/{run_id}")
+        "{dir}/{run_id}.csv"
+    output: directory("{dir}/fastq-run/{run_id,\w+}")
     params:
         slurm__account="b1042",
         slurm__partition="genomics",
