@@ -20,7 +20,8 @@ pretty_MA_plot = function(results,
                           genes = NULL,
                           custom_annotation = NULL,
                           max_overlaps = 10,
-                          label_alpha = 1)
+                          label_alpha = 1,
+                          random_seed = 12345)
 {
   require(ggplot2)
   require(ggrepel)
