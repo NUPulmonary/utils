@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-WRAPPER_DIR = "/projects/b1038/Pulmonary/nmarkov/utils/snakemake/wrappers"
+WRAPPER_DIR = "/home/rag0151/utils/snakemake/wrappers"
 #receive command-line inputs using the --config flag
 DATA_DIR = config['data_dir']
 SAMPLE_CSV_PATH = config['sample_csv_path'] 
@@ -31,7 +31,7 @@ rule demultiplex:
         slurm__account="b1042",
         slurm__partition="genomics",
         slurm__cores=4,
-        slurm__hours=2,
+        slurm__hours=4,
         slurm__mem=40,
         cellranger_dir=CELLRANGER_DIR,
         keep_cellranger_output=True,
