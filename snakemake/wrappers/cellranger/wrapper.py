@@ -29,7 +29,8 @@ samples = pd.read_csv(sample_csv_path)
 if "Expected" not in samples.columns:
     warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")
     samples['Expected'] = 3000
-expected_cells = samples[samples.Sample == sample, 'Expected']
+#can expect all will be the same
+expected_cells = samples.loc[samples.Sample == sample, 'Expected'].iloc[1]
 
 # mode of count operation
 # gex
@@ -112,6 +113,7 @@ shell(
         {sample_arg} \
         {input_arg} \
         {feature_ref} \
+        --expect-cells={expected_cells} \
         {log}
     """
 )
