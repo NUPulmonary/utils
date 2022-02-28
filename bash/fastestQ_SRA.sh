@@ -8,7 +8,7 @@
 mkdir -p "$3"
 
 #note: automatically splits paired reads
-module load sratoolkit/2.9.2
+module load sratoolkit/3.0.0
 ids=$(<"$1") #put SRA/ERA IDs into single string to iterate through
 for i in $ids
 do
