@@ -16,6 +16,7 @@ do
 done
 
 #gzip all files
+module load parallel/20160922
 cd $4
 parallel -j $2 gzip ::: *.fastq #run in parallel
 
