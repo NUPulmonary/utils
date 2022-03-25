@@ -58,13 +58,37 @@ pretty_MA_plot = function(results,
   
   if(is.null(genes))
   {
-    plt = plt + geom_label_repel(data = subset(results, padj < 0.05 & abs(log2FoldChange) >= lfc_threshold),
-                     aes_string(label = name_col), max.overlaps = max_overlaps, fill = alpha(c("white"), label_alpha))
+    #plot as separate up and down to prevent crossing of the origin
+    plt = plt + 
+      geom_label_repel(data = subset(results, padj < 0.05 & 
+                                                 abs(log2FoldChange) >= lfc_threshold &
+                                                 log2FoldChange > 0),
+                                 aes_string(label = name_col), 
+                                 max.overlaps = max_overlaps, 
+                                 fill = alpha(c("white"), label_alpha),
+                                 ylim = c(1, NA)) +
+      geom_label_repel(data = subset(results, padj < 0.05 & 
+                                       abs(log2FoldChange) >= lfc_threshold &
+                                       log2FoldChange <= 0),
+                       aes_string(label = name_col), 
+                       max.overlaps = max_overlaps, 
+                       fill = alpha(c("white"), label_alpha),
+                       ylim = c(NA, -1))
   } else
   {
-    plt = plt + geom_label_repel(data = subset(results, external_gene_name %in% genes),
-                                 aes_string(label = name_col),
-                                 min.segment.length = 0.1, max.overlaps = max_overlaps, fill = alpha(c("white"), label_alpha))
+    plt = plt + 
+      geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange > 0),
+                       aes_string(label = name_col),
+                       min.segment.length = 0.1, 
+                       max.overlaps = max_overlaps, 
+                       fill = alpha(c("white"), label_alpha),
+                       ylim = c(1, NA)) +
+      geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange <= 0),
+                       aes_string(label = name_col),
+                       min.segment.length = 0.1, 
+                       max.overlaps = max_overlaps, 
+                       fill = alpha(c("white"), label_alpha),
+                       ylim = c(NA, -1))
   }
                                  
   
