@@ -15,8 +15,10 @@ cellranger_dir = snakemake.params.get("cellranger_dir", "")
 transcriptome = snakemake.params.get("transcriptome", None)
 chemistry = snakemake.params.get("chemistry", None)
 sample = snakemake.wildcards.get("sample", None)
+sample_types = snakemake.params.get("sample_types", None)
 skip_sample = snakemake.params.get("skip_sample", False)
-sample_csv_path = snakemake.params.get("sample_csv_path", "")
+sample_csv_path = snakemake.params.get("sample_csv_path", None)
+expected_cells = snakemake.params.get("n_cells", None)
 
 input_fastq_type = snakemake.params.get("input_fastq_type", "gex")
 gex_fastqs = snakemake.params.get("gex_fastqs", None)
@@ -25,12 +27,13 @@ antibodies = snakemake.params.get("antibodies", None)
 #handle expected cells
 #if no cell numbers are specified, default to 3000 to match cellranger defaults
 #keeps backward compatibility with old versions as well (to any version that accepts --expected-cells flag)
-samples = pd.read_csv(sample_csv_path)
-if "Expected" not in samples.columns:
-    warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")
-    samples['Expected'] = 3000
-#can expect all will be the same
-expected_cells = samples.loc[samples.Sample == sample, 'Expected'].iloc[1]
+if sample_csv_path is not None:
+    samples = pd.read_csv(sample_csv_path)
+    if "Expected" not in samples.columns:
+        warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")
+        samples['Expected'] = 3000
+if expected_cells is None and sample_csv_path is not None:
+    expected_cells = samples[samples.Sample == sample, 'Expected'].values[0]
 
 # mode of count operation
 # gex
@@ -47,6 +50,10 @@ if input_fastq_type == "antibody":
         mode = "gex+antibody"
 elif input_fastq_type == "gex":
     pass
+elif input_fastq_type == "gex+antibody":
+    assert antibodies is not None, "param antibodies is required for this mode of cellranger count"
+    assert sample_types is not None, "param sample_types is required for this model of cellranger count"
+    mode = "gex+antibody"
 else:
     raise ValueError(f"Unrecognized input_fastq_type value `{input_fastq_type}', expected gex, antibody, gex+antibody")
 
@@ -75,22 +82,35 @@ if mode == "gex":
         sample_arg = f"--sample={sample}"
 
 if mode == "gex+antibody":
-    antibodies = os.path.realpath(antibodies)
-    n_fastq = len(input_paths) + len(gex_fastqs)
-    libraries = pd.DataFrame({
-        "fastqs": input_paths + gex_fastqs,
-        "sample": sample,
-        "library_type": [input_fastq_type] * len(input_paths) + ["gex"] * len(gex_fastqs),
-    })
+    # We can invoke this with fastq files in different directories and same name
+    # or with different names and same directory
+    if gex_fastqs is None:  # same directory option
+        libraries = pd.DataFrame({
+            "fastqs": input_paths[0],  # ugly hack, fix later
+            "sample": list(sample_types.values()),
+            "library_type": list(sample_types.keys())
+        })
+    else:  # same name option
+        n_fastq = len(input_paths) + len(gex_fastqs)
+        libraries = pd.DataFrame({
+            "fastqs": input_paths + gex_fastqs,
+            "sample": sample,
+            "library_type": [input_fastq_type] * len(input_paths) + ["gex"] * len(gex_fastqs),
+        })
     libraries.library_type.replace({
         "gex": "Gene Expression",
         "antibody": "Antibody Capture",
     }, inplace=True)
     _, lib_path = tempfile.mkstemp()
     libraries.to_csv(lib_path, index=False)
+    antibodies = os.path.realpath(antibodies)
     input_arg = f"--libraries={lib_path}"
     feature_ref = f"--feature-ref=\"{antibodies}\""
     lib_msg = f"echo \"Created libraries.csv at {lib_path}\""
+
+expected_cells_arg = ""
+if expected_cells is not None:
+    expected_cells_arg = f"--expect-cells {expected_cells}"
 
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
@@ -113,7 +133,7 @@ shell(
         {sample_arg} \
         {input_arg} \
         {feature_ref} \
-        --expect-cells={expected_cells} \
+        {expected_cells_arg} \
         {log}
     """
 )
