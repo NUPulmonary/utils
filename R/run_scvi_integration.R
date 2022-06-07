@@ -7,6 +7,8 @@
 #' @param batch_col name of metadata column specifying batch. Defaults to orig.ident, where each sample is its own batch.
 #' @param RDS_path location to save RDS package. Ignored if save_RDS is FALSE.
 #' @param use_GPU toggle to true for running on GPU
+#' @param n_layers Number of hidden layers used for encoder and decoder NNs
+#' @param dropout_rate Dropout rate for neural networks
 #' 
 #' @return a Seurat object with new embeddings in the "SCVI" slot
 #' @export
@@ -18,7 +20,9 @@ run_SCVI_integration = function(object,
                                 batch_col = "orig.ident",
                                 n_epochs = NA,
                                 RDS_path = NA,
-                                use_GPU = FALSE)
+                                use_GPU = FALSE,
+                                n_layers = 1,
+                                dropout_rate = 0.1)
 {
   #if required, set up R environment
   if(!is.na(project_path))
@@ -69,7 +73,7 @@ run_SCVI_integration = function(object,
   
   #create model
   scvi$model$SCVI$setup_anndata(annData, batch_key = batch_col)
-  model = scvi$model$SCVI(annData)
+  model = scvi$model$SCVI(annData, dropout_rate = as.double(dropout_rate), n_layers = as.integer(n_layers))
   
   #if supplied, set number of epochs
   
