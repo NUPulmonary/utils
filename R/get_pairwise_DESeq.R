@@ -106,7 +106,8 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
   res_df = lapply(res, function(comp){
     df = as.data.frame(comp) %>% 
       rownames_to_column("ensembl_gene_id") %>% 
-      left_join(., gene_conv)
+      left_join(., gene_conv) %>% 
+      dplyr::relocate(ensembl_gene_id, external_gene_name)
     return(df) })
   
   #data output   
