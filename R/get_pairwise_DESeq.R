@@ -39,6 +39,8 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
   library(doParallel)
   library(BiocParallel)
   library(Cairo)
+  library(tidyverse)
+  library(biomaRt)
   register(MulticoreParam(cores))
   
   source("~/utils/R/pretty_MA_plot.R")
@@ -92,7 +94,20 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
   names(ma_plots) = names(res)
   
   #convert results to dataframes for easier handling
-  res_df = lapply(res, as.data.frame)
+  if(!is.null(custom_annotation))
+  {
+    gene_conv = custom_annotation
+  } else
+  {
+    mart = useMart("ensembl", mart_name)
+    gene_conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"), mart = mart)
+  }
+    
+  res_df = lapply(res, function(comp){
+    df = as.data.frame(comp) %>% 
+      rownames_to_column("ensembl_gene_id") %>% 
+      left_join(., gene_conv)
+    return(df) })
   
   #data output   
   if(!is.na(output_directory))
