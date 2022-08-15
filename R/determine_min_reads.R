@@ -25,9 +25,16 @@ determine_min_reads = function(n_cells,
     #iterate through desired number of simulations
     sims = mclapply(1:simulations, function(sim){
       cell_assignments = sample(1:n_cells, size = kit_reads, replace = T) # each cell given equal weight
-      sim_df = tibble(read_id = read_ids, cell = cell_assignments) %>% 
+      sim_df = tibble(read_id = read_ids, cell = cell_assignments)
+      
+      #fill in cells without an assigned read to account for empty
+      empties = tibble(cell = setdiff(1:n_cells, sim_df$cell),
+                       read_id = NA)
+      
+      #now zeros are accounted for
+      sim_df = bind_rows(sim_df, empties) %>% 
         group_by(cell) %>% 
-        dplyr::summarize(n_reads = n()) %>% 
+        dplyr::summarize(n_reads = sum(!is.na(read_id))) %>% 
         ungroup %>% 
         mutate(simulation_number = sim)
       return(sim_df) },
@@ -39,7 +46,8 @@ determine_min_reads = function(n_cells,
       dplyr::summarize(median_reads = median(n_reads), #mean and median will always be reads/cells
                        mean_reads = mean(n_reads),
                        sd_reads = sd(n_reads),
-                       min_reads = min(n_reads)) %>% 
+                       min_reads = min(n_reads),
+                       empty_cells = sum(n_reads == 0)) %>% 
       ungroup() %>% 
       mutate(kit = names(reads)[which(reads == kit_reads)],
              n_reads = kit_reads) })
@@ -50,6 +58,7 @@ determine_min_reads = function(n_cells,
     dplyr::summarize(median_reads = median(median_reads),
                      mean_reads = mean(mean_reads),
                      mean_sd = mean(sd_reads),
+                     mean_empty_cells = mean(empty_cells),
                      global_min_reads = min(min_reads)) %>% 
     ungroup()
     
