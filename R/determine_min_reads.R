@@ -21,6 +21,8 @@ determine_min_reads = function(n_cells,
   results = lapply(reads, function(kit_reads){
     read_ids = 1:kit_reads #just name 1-N as well
     set.seed(random_seed)
+    kit_name = names(reads)[which(reads == kit_reads)]
+    print(paste("Running simulation:", kit_name))
     
     #iterate through desired number of simulations
     sims = mclapply(1:simulations, function(sim){
@@ -49,7 +51,7 @@ determine_min_reads = function(n_cells,
                        min_reads = min(n_reads),
                        empty_cells = sum(n_reads == 0)) %>% 
       ungroup() %>% 
-      mutate(kit = names(reads)[which(reads == kit_reads)],
+      mutate(kit = kit_name,
              n_reads = kit_reads) })
   
   #finally, summarize by kit
