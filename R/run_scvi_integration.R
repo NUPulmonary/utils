@@ -7,6 +7,7 @@
 #' @param batch_col name of metadata column specifying batch. Defaults to orig.ident, where each sample is its own batch.
 #' @param RDS_path location to save RDS package. Ignored if save_RDS is FALSE.
 #' @param use_GPU toggle to true for running on GPU
+#' @param hvgs number of highly variable genes to use in the model. Default: 3000.
 #' @param n_layers Number of hidden layers used for encoder and decoder NNs
 #' @param dropout_rate Dropout rate for neural networks
 #' 
@@ -21,6 +22,7 @@ run_SCVI_integration = function(object,
                                 n_epochs = NA,
                                 RDS_path = NA,
                                 use_GPU = FALSE,
+                                hvgs = 3000,
                                 n_layers = 1,
                                 dropout_rate = 0.1)
 {
@@ -61,8 +63,8 @@ run_SCVI_integration = function(object,
   }
   
   #get variable features (assume already calculated with method of choice)
-  top3k = head(VariableFeatures(object), 3000)
-  object_scvi = object[top3k, ]
+  top_n = head(VariableFeatures(object), hvgs)
+  object_scvi = object[top_n, ]
   
   #convert to annData object
   annData = convertFormat(object_scvi, 
