@@ -13,6 +13,7 @@ result = []
 for sample in input:
     m = pd.read_csv(f"{sample}/outs/metrics_summary.csv")
     m.insert(0, "Sample", os.path.basename(sample))
+    m.insert(2,'Fraction Reads in Cells',m.pop('Fraction Reads in Cells'))
     result.append(m)
 result = sorted(result, key=lambda x: x.shape[1], reverse=True)
 result = pd.concat(result, sort=False)
