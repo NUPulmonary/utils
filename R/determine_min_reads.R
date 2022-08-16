@@ -42,6 +42,8 @@ determine_min_reads = function(n_cells,
       return(sim_df) },
       mc.cores = cores)
     
+    gc()
+    
     #summarize by individual simulation
     simulation_summary = bind_rows(sims) %>% 
       group_by(simulation_number) %>% 
