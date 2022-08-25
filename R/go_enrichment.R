@@ -1,3 +1,4 @@
+
 #' Identify GO enrichment of a list of gene hits
 #' 
 #' Script based on the GO enrichment analysis in k_means_figure
@@ -25,7 +26,7 @@ go_enrichment = function(deseq_object,
   all_counts = counts(deseq_object, normalized = T)
   universe = rownames(all_counts[rowSums(all_counts) >= expression_cutoff, ])
   fisherTest = new("classicCount", testStatistic = GOFisherTest, name = "Fisher test")
-
+  
   # 1 = selected, 0 = not selected in topGO
   selection = as.numeric(universe %in% goi)
   names(selection) = universe
