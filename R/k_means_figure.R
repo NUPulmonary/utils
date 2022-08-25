@@ -23,6 +23,7 @@ construct_goi_matrix = function(dge,
                                 minReps = 7,
                                 baseMeanCutoff = 0)
 {
+  require(BiocParallel)
   register(MulticoreParam(cores))
   clusterAnnos = NULL #updated later if necessary
   
