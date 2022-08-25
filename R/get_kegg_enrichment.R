@@ -1,8 +1,6 @@
 #' Identify KEGG enrichment for all annotated kegg terms for an organism using Fsher tests
 #' 
-#' Script based on the GO enrichment analysis in k_means_figure
-#' To get GO enrichment of a set of genes of interest based on universe of all expressed genes in dataset
-#' Rogan Grant 2021-04-14 - 2021-12-16 
+#' Rogan Grant 20212-08-25
 #' 
 #' @param deseq_object a DESeq2 object with library normalization pre-calculated using DESeq(), vst(), etc
 #' @param goi vector genes of interest in ensembl gene ID format. For fisher test: just IDs. For KS test: vector of scores with IDs as names.
