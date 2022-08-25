@@ -45,6 +45,9 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
   
   source("~/utils/R/pretty_MA_plot.R")
   
+  #evaluate sort direction
+  sort_direction = match.arg(sort_direction)
+  
   #if user wants design change
   if(!is.na(comparison_col))
   {
