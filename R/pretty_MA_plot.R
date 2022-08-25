@@ -52,6 +52,7 @@ pretty_MA_plot = function(results,
     scale_color_manual(values = c("NS" = alpha(colour = "grey50", alpha = 0.05),
                                   "upregulated" = "firebrick4",
                                   "downregulated" = "dodgerblue4")) +
+    theme_bw(base_family = "Arial") +
     theme(legend.position = "none") + 
     xlab("Mean Expression") +
     ylab("log2(Fold Change)")
