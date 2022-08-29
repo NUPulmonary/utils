@@ -25,15 +25,8 @@ gex_fastqs = snakemake.params.get("gex_fastqs", None)
 antibodies = snakemake.params.get("antibodies", None)
 
 #handle expected cells
-#if no cell numbers are specified, default to 3000 to match cellranger defaults
-#keeps backward compatibility with old versions as well (to any version that accepts --expected-cells flag)
-if sample_csv_path is not None:
-    samples = pd.read_csv(sample_csv_path)
-    if "Expected" not in samples.columns:
-        warnings.warn("No Expected column detected. Defaulting to 3000 cells/sample.")
-        samples['Expected'] = 3000
-if expected_cells is None and sample_csv_path is not None:
-    expected_cells = samples[samples.Sample == sample, 'Expected'].values[0]
+if expected_cells is None and sample_csv_path is not None and 'Expected' in samples:
+  expected_cells = samples[samples.Sample == sample, 'Expected'].values[0]
 
 # mode of count operation
 # gex
