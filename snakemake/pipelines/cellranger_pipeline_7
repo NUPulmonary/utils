@@ -1,0 +1,88 @@
+import pandas as pd
+import os
+
+MODE = config['mode']
+WRAPPER_DIR = "/home/rag0151/utils/snakemake/wrappers"
+#receive command-line inputs using the --config flag
+DATA_DIR = config['data_dir']
+SAMPLE_CSV_PATH = config['sample_csv_path'] 
+INPUT_FASTQ_TYPE = config['input_fastq_type']
+CELLRANGER_DIR = config['cellranger_dir']
+
+if MODE != 'demult_only':
+  TRANSCRIPTOME = config['transcriptome']
+  
+if MODE != 'demult_only' and input_fastq_type != 'gex':
+  ANTIBODIES = config['antibodies']
+  GEX_FASTQS = config['gex_fastqs']
+  #handle empty param
+  if GEX_FASTQS == "":
+    GEX_FASTQS = None
+  else:
+    GEX_FASTQS = GEX_FASTQS.split(' ')
+
+SAMPLES = pd.read_csv(SAMPLE_CSV_PATH)
+os.chdir(DATA_DIR)
+
+if MODE != 'demult_only':
+  rule all:
+      input:
+        f"{DATA_DIR}/cellranger/metrics_summary.csv"
+else:
+  rule all:
+      input:
+        [f"{DATA_DIR}/fastq-run/{run_id}" for run_id in SAMPLES.RunID.unique()]
+
+rule sample_sheet:
+    input: SAMPLE_CSV_PATH
+    output: f"{DATA_DIR}/{{run_id,\w+}}.csv"
+    params:
+        slurm__skip=True
+    wrapper:
+        f"file://{WRAPPER_DIR}/sample_sheet"
+
+rule demultiplex:
+    input:
+        "../../raw/{run_id}",
+        "{dir}/{run_id}.csv"
+    output: directory("{dir}/fastq-run/{run_id,\w+}")
+    params:
+        slurm__account="b1042",
+        slurm__partition="genomics",
+        slurm__cores=4,
+        slurm__hours=4,
+        slurm__mem=40,
+        cellranger_dir=CELLRANGER_DIR,
+        keep_cellranger_output=True,
+    wrapper:
+        f"file://{WRAPPER_DIR}/mkfastq"
+
+if MODE != 'demult_only':
+  rule cellranger:
+      input: 
+          lambda x: [f"{DATA_DIR}/fastq-run/{r}" for r in SAMPLES.RunID[SAMPLES.Sample == x.sample].values]
+      output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
+      params:
+          slurm__account="b1042",
+          slurm__partition="genomics",
+          slurm__cores=8,
+          slurm__hours=16,
+          slurm__mem=60,
+          chemistry="auto",
+          input_fastq_type=INPUT_FASTQ_TYPE,
+          antibodies=ANTIBODIES,
+          transcriptome=TRANSCRIPTOME,
+          cellranger_dir=CELLRANGER_DIR,
+          sample_csv_path = SAMPLE_CSV_PATH,
+          gex_fastqs = GEX_FASTQs
+      wrapper:
+          f"file://{WRAPPER_DIR}/cellranger"
+
+if MODE != 'demult_only':
+  rule metrics_summary:
+      input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
+      output: "{dir}/cellranger/metrics_summary.csv"
+      params:
+          slurm__skip=True
+      wrapper:
+          f"file://{WRAPPER_DIR}/metrics_summary"
