@@ -50,7 +50,7 @@ else:
 shell(
     """
     module purge all
-    module load bcl2fastq/2.19.1
+    module load bcl2fastq/2.20
     {load_cellranger}
 
     if [[ -d {flowcell} ]]; then
