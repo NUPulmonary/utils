@@ -50,7 +50,7 @@ rule demultiplex:
         slurm__account="b1042",
         slurm__partition="genomics",
         slurm__cores=4,
-        slurm__hours=4,
+        slurm__hours=16,
         slurm__mem=40,
         cellranger_dir=CELLRANGER_DIR,
         keep_cellranger_output=True,
