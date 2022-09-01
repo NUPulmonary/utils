@@ -12,7 +12,7 @@ CELLRANGER_DIR = config['cellranger_dir']
 if MODE != 'demult_only':
   TRANSCRIPTOME = config['transcriptome']
   
-if MODE != 'demult_only' and input_fastq_type != 'gex':
+if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
   ANTIBODIES = config['antibodies']
   GEX_FASTQS = config['gex_fastqs']
   #handle empty param
@@ -74,7 +74,7 @@ if MODE != 'demult_only':
           transcriptome=TRANSCRIPTOME,
           cellranger_dir=CELLRANGER_DIR,
           sample_csv_path = SAMPLE_CSV_PATH,
-          gex_fastqs = GEX_FASTQs
+          gex_fastqs = GEX_FASTQS
       wrapper:
           f"file://{WRAPPER_DIR}/cellranger"
 
