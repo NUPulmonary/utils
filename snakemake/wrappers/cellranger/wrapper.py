@@ -25,6 +25,7 @@ gex_fastqs = snakemake.params.get("gex_fastqs", None)
 antibodies = snakemake.params.get("antibodies", None)
 
 #handle expected cells
+samples = pd.read_csv(sample_csv_path)
 if expected_cells is None and sample_csv_path is not None and 'Expected' in samples:
   expected_cells = samples[samples.Sample == sample, 'Expected'].values[0]
 
