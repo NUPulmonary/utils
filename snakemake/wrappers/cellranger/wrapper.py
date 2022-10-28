@@ -19,6 +19,7 @@ sample_types = snakemake.params.get("sample_types", None)
 skip_sample = snakemake.params.get("skip_sample", False)
 sample_csv_path = snakemake.params.get("sample_csv_path", None)
 expected_cells = snakemake.params.get("n_cells", None)
+include_introns = snakemake.params.get("include_introns", None)
 
 input_fastq_type = snakemake.params.get("input_fastq_type", "gex")
 gex_fastqs = snakemake.params.get("gex_fastqs", None)
@@ -107,6 +108,12 @@ expected_cells_arg = ""
 if expected_cells is not None:
     expected_cells_arg = f"--expect-cells {expected_cells}"
 
+include_introns_arg = ""
+if include_introns is not None:
+    include_introns_arg = "--include-introns false"
+    if include_introns:
+        include_introns_arg = "--include-introns true"
+
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
 
@@ -125,6 +132,7 @@ shell(
     {cellranger_dir}cellranger count --id {sample} \
         --transcriptome={transcriptome} \
         --chemistry={chemistry} \
+        {include_introns_arg} \
         {sample_arg} \
         {input_arg} \
         {feature_ref} \
