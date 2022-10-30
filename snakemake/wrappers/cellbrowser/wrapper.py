@@ -26,6 +26,14 @@ cluster_field = params.get("cluster_field", "leiden")
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
 
+tar_cmd = ""
+if output[0].endswith(".tar.gz"):
+    tar_cmd = (
+        'echo "Tarring to ${{out}}.tar.gz"'
+        'tar -czf {output} $out_dir'
+        'rm -rf $out_dir'
+    )
+
 shell(
     """
     h5=`realpath {input.h5ad}`
@@ -59,5 +67,6 @@ shell(
         >> "$out_dir/cellbrowser.conf"
 
     cp "$meta" "$markers" $out_dir
+    {tar_cmd}
     """
 )
