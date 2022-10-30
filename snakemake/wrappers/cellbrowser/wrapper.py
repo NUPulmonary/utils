@@ -14,9 +14,9 @@ output = snakemake.output
 params = snakemake.params
 sample = snakemake.wildcards.get("sample", None)
 
-assert hasattr(input, "h5ad"), "Output should have `h5ad' field with path to h5ad file to save"
-assert hasattr(input, "meta"), "Output should have `meta' field with path to metadata file to save"
-assert hasattr(input, "markers"), "Output should have `markers' field with path to markers file to save"
+assert hasattr(input, "h5ad"), "Input should have `h5ad' field with path to h5ad file to save"
+assert hasattr(input, "meta"), "Input should have `meta' field with path to metadata file to save"
+assert hasattr(input, "markers"), "Input should have `markers' field with path to markers file to save"
 assert len(output) == 1, "Expect single output with tar.gz file"
 
 assert sample is not None, "sample wildcard is required"
