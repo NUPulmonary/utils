@@ -8,9 +8,14 @@ import pandas as pd
 
 input = snakemake.input
 output = snakemake.output
-field = snakemake.params.get("field", "Mean Reads per Cell")
-
 data = pd.read_csv(input[0])
+
+#add handling for TCR and GEX metrics_summary.csv formats
+if "Mean Reads per Cell" in data.columns:
+    field = snakemake.params.get("field", "Mean Reads per Cell")
+elif "Mean Read Pairs per Cell" in data.columns:
+    field = snakemake.params.get("field", "Mean Read Pairs per Cell")
+
 lf_data = data.iloc[:, :2]
 lf_data[field] = data[field]
 depth = data[field]
