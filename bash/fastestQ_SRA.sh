@@ -20,5 +20,5 @@ module load parallel/20160922
 cd $4
 parallel -j $2 gzip ::: *.fastq #run in parallel
 
-#now remove tmp files
-rm -r "$3"
+#now remove tmp files (deprecated)
+#rm -r "$3"
