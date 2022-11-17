@@ -8,11 +8,13 @@ bulkDEA = function(object, #seurat object
                    metaData, #metadata mapping samples to factors. Rownames are sample names.
                    design, #design string for DESeq
                    splitCells = T, #whether or not to split by cell type (or whatever)
+                   skip = NA, #if splitting cells, which factors should be skipped? Defaults to none.
                    cellFactor = NULL, #name of the cell-type column
                    organism, #in ensembl format, e.g. mmusculus
                    geneVar, #type of gene ID used, in biomart format e.g. ensembl_gene_id
                    outDir, #directory to output results
                    outPrefix, #file prefix for results files
+                   sortDirection = c("descending", "ascending"), #direction to sort comparisons: alphabetical "ascending" or reverse "descending"
                    minCells = 50, #whether or not to override the minimum number of cells/samples
                    cores = 1, #cores to run in parallel
                    fit_type = "parametric", #to control dispersion fitting
@@ -31,6 +33,8 @@ bulkDEA = function(object, #seurat object
    setwd(outDir)
    
    compFactor = colnames(metaData)[1] # the factor we will be comparing by
+   sortDirection = match.arg(sortDirection)
+   shouldDecrease = (sortDirection == "decreasing")
    
    #make mart for conversion
    mart = useMart("ensembl", paste0(organism, "_gene_ensembl"))
@@ -58,7 +62,8 @@ bulkDEA = function(object, #seurat object
    bulkSampleData = as.data.frame(bulkSampleData)
    
    
-   cellTypes = c("AllCells", levels(factor(object@meta.data[ , cellFactor])))
+   cellTypes = c(levels(factor(object@meta.data[ , cellFactor])))
+   cellTypes = setdiff(cellTypes, skip)
    for(cell in cellTypes)
    {
       message(cell)
@@ -137,7 +142,7 @@ bulkDEA = function(object, #seurat object
       saveRDS(des, paste(dateString, outPrefix, cell, "subset", "des.rds", sep = "_"))
       dge = DESeq(des, parallel = T, fitType = fit_type)
       
-      allFactors = sort(unique(as.character(metaData[, 1])), decreasing = T) # reverse order so we get older/younger for all comps
+      allFactors = sort(unique(as.character(metaData[, 1])), decreasing = shouldDecrease)
       allComps = combn(x = allFactors, m = 2, simplify = F) # every possible combination of ages; list of older, younger for each comp
       allComps = lapply(allComps, as.character) #otherwise we get factor levels!
       for(comp in allComps)
