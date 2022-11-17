@@ -203,6 +203,23 @@ k_means_figure = function(dge,
     universe = rownames(all_counts[rowSums(all_counts) > 0, ])
     fisherTest = new("classicCount", testStatistic = GOFisherTest, name = "Fisher test")
     
+    #determine gene ID type automatically
+    #assume some transgenes will not fit the regular expression
+    if(sum(grepl("^ENS|WBcel", rownames(dge))) > 100)
+    {
+      message("Using ID type: ensembl_gene_id")
+      id_type = "ensembl"
+      #entrezgenes are all numeric
+    } else if(sum(grepl("^\\d+$", rownames(dge))) > 100)
+    {
+      message("Using ID type: entrezgene_id")
+      id_type = "entrez"
+    } else
+    {
+      message("Using ID type: external_gene_name")
+      id_type = "genename"
+    }
+    
     clusters = unique(as.character(kmeans_results$cluster))
     cluster_GO = mclapply(clusters, function(x){
       cluster_genes = kmeans_results[kmeans_results$cluster == x, "gene"]
@@ -215,7 +232,7 @@ k_means_figure = function(dge,
                       return(x == 1)},
                     annot = annFUN.org, 
                     mapping = go_annotations, 
-                    ID = "ensembl")
+                    ID = id_type)
       
       #run Fisher test
       test_results = getSigGroups(go_data, fisherTest)
