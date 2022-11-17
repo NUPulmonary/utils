@@ -21,6 +21,7 @@ pretty_MA_plot = function(results,
                           custom_annotation = NULL,
                           max_overlaps = 10,
                           label_alpha = 1,
+                          label_text_size = (10 / .pt),
                           random_seed = 12345)
 {
   require(ggplot2)
@@ -64,15 +65,17 @@ pretty_MA_plot = function(results,
       geom_label_repel(data = subset(results, padj < 0.05 & 
                                                  abs(log2FoldChange) >= lfc_threshold &
                                                  log2FoldChange > 0),
-                                 aes_string(label = name_col), 
-                                 max.overlaps = max_overlaps, 
-                                 fill = alpha(c("white"), label_alpha),
-                                 ylim = c(1, NA)) +
+                       aes_string(label = name_col), 
+                       max.overlaps = max_overlaps,
+                       fill = alpha(c("white"), label_alpha),
+                       size = label_text_size,
+                       ylim = c(1, NA)) +
       geom_label_repel(data = subset(results, padj < 0.05 & 
                                        abs(log2FoldChange) >= lfc_threshold &
                                        log2FoldChange <= 0),
                        aes_string(label = name_col), 
                        max.overlaps = max_overlaps, 
+                       size = label_text_size,
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(NA, -1))
   } else
@@ -83,12 +86,14 @@ pretty_MA_plot = function(results,
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
+                       size = label_text_size,
                        ylim = c(1, NA)) +
       geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange <= 0),
                        aes_string(label = name_col),
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
+                       size = label_text_size,
                        ylim = c(NA, -1))
   }
                                  
