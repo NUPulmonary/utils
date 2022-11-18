@@ -75,7 +75,8 @@ if MODE != 'demult_only':
           transcriptome=TRANSCRIPTOME,
           cellranger_dir=CELLRANGER_DIR,
           sample_csv_path = SAMPLE_CSV_PATH,
-          gex_fastqs = GEX_FASTQS
+          gex_fastqs = GEX_FASTQS,
+          include_introns = INCLUDE_INTRONS
       wrapper:
           f"file://{WRAPPER_DIR}/cellranger"
 
