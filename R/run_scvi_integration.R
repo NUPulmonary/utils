@@ -24,7 +24,9 @@ run_SCVI_integration = function(object,
                                 use_GPU = FALSE,
                                 hvgs = 3000,
                                 n_layers = 1,
-                                dropout_rate = 0.1)
+                                dropout_rate = 0.1,
+                                early_stopping = FALSE,
+                                n_latent = 10)
 {
   #if required, set up R environment
   if(!is.na(project_path))
@@ -83,10 +85,10 @@ run_SCVI_integration = function(object,
   # train the model
   if(is.na(n_epochs))
   {
-    model$train(use_gpu = use_GPU)
+    model$train(use_gpu = use_GPU, early_stopping = as.logical(early_stopping))
   } else
   {
-    model$train(use_gpu = use_GPU, max_epochs = as.integer(n_epochs))
+    model$train(use_gpu = use_GPU, max_epochs = as.integer(n_epochs), early_stopping = as.logical(early_stopping))
   }
   
   #get latent representation and place back into Seurat object
