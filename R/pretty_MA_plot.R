@@ -9,6 +9,7 @@
 # name_col: the name of the column with gene symbols to be used for plotting. Ignored if convert_ids = T
 # lfc_threshold: the minimum absolute log2 fold-change for labeling. Defaults to 0 (all significant genes)
 # genes: genes to subset to
+# highlight_genes: gene labels to highlight with larger text
 # custom_annotation: a custom gene conversion set (helpful for metagenomes); must be in biomart format
 
 pretty_MA_plot = function(results, 
@@ -18,6 +19,7 @@ pretty_MA_plot = function(results,
                           name_col = "row.names",
                           lfc_threshold = 0,
                           genes = NULL,
+                          highlight_genes = c(),
                           custom_annotation = NULL,
                           max_overlaps = 10,
                           label_alpha = 1,
@@ -65,36 +67,36 @@ pretty_MA_plot = function(results,
       geom_label_repel(data = subset(results, padj < 0.05 & 
                                                  abs(log2FoldChange) >= lfc_threshold &
                                                  log2FoldChange > 0),
-                       aes_string(label = name_col), 
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
                        max.overlaps = max_overlaps,
                        fill = alpha(c("white"), label_alpha),
-                       size = label_text_size,
                        ylim = c(1, NA)) +
       geom_label_repel(data = subset(results, padj < 0.05 & 
                                        abs(log2FoldChange) >= lfc_threshold &
                                        log2FoldChange <= 0),
-                       aes_string(label = name_col), 
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
                        max.overlaps = max_overlaps, 
-                       size = label_text_size,
                        fill = alpha(c("white"), label_alpha),
-                       ylim = c(NA, -1))
+                       ylim = c(NA, -1)) +
+      scale_size_manual(values = c("TRUE" = label_text_size * 1.5,
+                                   "FALSE" = label_text_size))
   } else
   {
     plt = plt + 
       geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange > 0),
-                       aes_string(label = name_col),
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
-                       size = label_text_size,
                        ylim = c(1, NA)) +
       geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange <= 0),
-                       aes_string(label = name_col),
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
-                       size = label_text_size,
-                       ylim = c(NA, -1))
+                       ylim = c(NA, -1)) +
+      scale_size_manual(values = c("TRUE" = label_text_size * 1.5,
+                                     "FALSE" = label_text_size))
   }
                                  
   
