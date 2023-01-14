@@ -34,7 +34,7 @@ bulkDEA = function(object, #seurat object
    
    compFactor = colnames(metaData)[1] # the factor we will be comparing by
    sortDirection = match.arg(sortDirection)
-   shouldDecrease = (sortDirection == "decreasing")
+   shouldDecrease = (sortDirection == "descending")
    
    #make mart for conversion
    mart = useMart("ensembl", paste0(organism, "_gene_ensembl"))
@@ -74,7 +74,7 @@ bulkDEA = function(object, #seurat object
          cellSub = cellSub[ , cellSub@meta.data[ , cellFactor] == cell]
       
       #now get joined counts matrices
-      counts = as.matrix(cellSub@assays$RNA@counts) # raw counts
+      counts = round(as.matrix(cellSub@assays$RNA@counts)) # raw counts
       sd = cell
       for(sample in allSamples) #get number of cells for each (zero therefore means not present)
       {
