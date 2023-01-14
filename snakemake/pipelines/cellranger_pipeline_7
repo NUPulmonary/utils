@@ -15,12 +15,19 @@ if MODE != 'demult_only':
   
 if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
   ANTIBODIES = config['antibodies']
-  GEX_FASTQS = config['gex_fastqs']
   #handle empty param
-  if GEX_FASTQS == "":
+  if ANTIBODIES == "" or ANTIBODIES == None:
+    ANTIBODIES = None
+  GEX_FASTQS = config['gex_fastqs']
+  if GEX_FASTQS == "" or GEX_FASTQS == None:
+    GEX_FASTQS = None
+else:
+  GEX_FASTQS = config['gex_fastqs']
+  if GEX_FASTQS == "" or GEX_FASTQS == None:
     GEX_FASTQS = None
   else:
     GEX_FASTQS = GEX_FASTQS.split(' ')
+  ANTIBODIES = None
 
 SAMPLES = pd.read_csv(SAMPLE_CSV_PATH)
 os.chdir(DATA_DIR)
