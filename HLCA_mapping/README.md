@@ -1,0 +1,11 @@
+This folder contains code for mapping a count matrix to the HLCA (https://www.biorxiv.org/content/10.1101/2022.03.10.483747v1). There are strict requirements to be able to map to the HLCA, so this code may not run correctly if the data is not in the anticipated format.
+
+Currently, this is designed to map transfer labels to a 10x .h5 file. This can be changed to read matrix folder files by simply editing the read_10x_h5 to read_10x_mtx in the python code and changing the input_h5 in the bash script to the folder path of the matrix folder. Mapping to an object that has already been normalized and/or filtered will be more tricky. Please consult the HLCA GitHub (https://github.com/LungCellAtlas/mapping_data_to_the_HLCA) if you're having trouble getting a different count matrix to map. Note that the raw data should be the input, and from there it may just take a few formatting errors to fix so that it can map. 
+
+There are two bash scripts, one for mapping a single file, and one for mapping multiple files. The run_scArches_multiple is configured to the file structure of cellranger count's output, that being all of the output information stored in the `cellranger/{sample name}` folder. The bash code may be edited to meet other file structures, just note that this script automatically gets the sample name because those are the names of the folders within the `cellranger` folder, so this may have the be changed.
+
+To run the script, first make sure that all of the files (scArches.py, run_scArches.sh/run_scArches_multiple.sh) are in the same folder (they should be  by default). Next, the only parameters you need to edit (barring input file format caveats mentioned above) are in the bash script. The sbatch commands work well for when I'm running a query sample, but at least please change the email. The script will run incrediby slow if at all if not ran on a gpu. Otherwise, there are only four paramaters to edit, which are self-explanatory in the bash script. The output directory will be the destination of the .h5ad file with all transfer labels for your cells.
+
+After editing the input parameters, simply run the code from the command line by running `sbatch run_scArches.sh` 
+
+
