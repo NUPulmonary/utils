@@ -140,6 +140,14 @@ bulkDEA = function(object, #seurat object
       joinedMat = joinedMat[, match(rownames(metaData), colnames(joinedMat))]
       des = DESeqDataSetFromMatrix(countData = joinedMat, colData = metaData, design = design)
       saveRDS(des, paste(dateString, outPrefix, cell, "subset", "des.rds", sep = "_"))
+      
+      #if there is a zero in every gene, data become unreliable. Discard.
+      if(all(rowSums(counts(des, normalized = F) == 0) > 0))
+      {
+        warning("Skipped -- Every gene contains at least one zero, cannot compute log geometric means")
+        next
+      }  
+      
       dge = DESeq(des, parallel = T, fitType = fit_type)
       
       allFactors = sort(unique(as.character(metaData[, 1])), decreasing = shouldDecrease)
