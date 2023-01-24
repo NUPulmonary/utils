@@ -139,7 +139,9 @@ bulkDEA = function(object, #seurat object
       stopifnot(class(design) == "formula") #calling formula in function causes massive problems. Avoid by doing externally!
       joinedMat = joinedMat[, match(rownames(metaData), colnames(joinedMat))]
       des = DESeqDataSetFromMatrix(countData = joinedMat, colData = metaData, design = design)
-      saveRDS(des, paste(dateString, outPrefix, cell, "subset", "des.rds", sep = "_"))
+      #safe for symbols
+      outPath = paste(dateString, outPrefix, gsub("\\W", replacement = "-", cell), "subset", "des.rds", sep = "_")
+      saveRDS(des, outPath)
       
       #if there is a zero in every gene, data become unreliable. Discard.
       if(all(rowSums(counts(des, normalized = F) == 0) > 0))
@@ -170,7 +172,7 @@ bulkDEA = function(object, #seurat object
          res = merge(res, conv, all.x = T)
          
          compName = paste(comp[1], "vs", comp[2], sep = "_")
-         write.csv(res, paste(dateString, outPrefix, cell, "subset", compName, "dge.csv", sep = "_"))
+         write.csv(res, paste(dateString, outPrefix, gsub("\\W", replacement = "-", cell), "subset", compName, "dge.csv", sep = "_"))
       }
    }
    
