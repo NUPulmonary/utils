@@ -23,11 +23,15 @@ construct_goi_matrix = function(dge,
                                 minReps = 7,
                                 baseMeanCutoff = 0)
 {
-  require(BiocParallel)
-  register(MulticoreParam(cores))
+  
+ if(cores > 1)
+ {
+  library(BiocParallel)
+   BiocParallel::register(MulticoreParam(cores))
+ }
   clusterAnnos = NULL #updated later if necessary
   
-  counts_mat = counts(dge, normalized = T)
+  counts_mat = DESeq2::counts(dge, normalized = T)
   if(is.na(qval_cutoff) || (is.null(design) && is.null(genes_of_interest))) #all cases to include all genes
   {
     qval_cutoff = 1
@@ -38,7 +42,7 @@ construct_goi_matrix = function(dge,
   {
     #perform anova-like test to identify genes which vary significantly across factor(s) of interest
     design = as.formula(design)
-    design(dge) = design
+    DESeq2::design(dge) = design
     deseq_results = DESeq(dge, 
                           test = "LRT", 
                           reduced = ~ 1,
@@ -56,7 +60,7 @@ construct_goi_matrix = function(dge,
   counts_mat = counts_mat[genes_of_interest, ]
   
   #z-score matrix (necessary for k means)
-  counts_mat = t(scale(t(counts_mat))) #transpose issue is annoying
+  counts_mat = t(base::scale(t(counts_mat))) #transpose issue is annoying
   
   return(counts_mat)
 }
@@ -72,8 +76,8 @@ k_elbow = function(dge,
                    max_k = 50,
                    minReps = 7) #this is the default for DESeq2
 {
-  require(ggplot2)
-  require(tidyverse)
+  library(ggplot2)
+  library(tidyverse)
   options(gsubfn.engine = "R")
   
   counts_mat = construct_goi_matrix(dge = dge,
@@ -130,11 +134,11 @@ k_means_figure = function(dge,
                           tidy_go = FALSE,
                           ...)
 {
-  require(pheatmap)
-  require(RColorBrewer)
-  require(topGO)
-  require(GO.db)
-  require(DESeq2)
+  library(pheatmap)
+  library(RColorBrewer)
+  library(topGO)
+  library(GO.db)
+  library(DESeq2)
   set.seed(random_seed)
   
   counts_mat = construct_goi_matrix(dge = dge,
@@ -158,8 +162,8 @@ k_means_figure = function(dge,
     cluster_conv = data.frame(new_cluster = c(1:max(kmeans_results$cluster)),
                               cluster = custom_order)
     kmeans_results = kmeans_results %>%
-      left_join(., cluster_conv) %>% 
-      arrange(new_cluster)
+      dplyr::left_join(., cluster_conv) %>% 
+      dplyr::arrange(new_cluster)
     colnames(kmeans_results) = c("gene", "old_cluster", "cluster") #fit into following code
   }
   
@@ -172,7 +176,7 @@ k_means_figure = function(dge,
   if(sortColumns)
   {
     columns_sorted = md %>% 
-      arrange_(.dots = column_sort_factors)
+      dplyr::arrange_(.dots = column_sort_factors)
     counts_mat = counts_mat[, rownames(columns_sorted)]
   }
   
@@ -197,7 +201,7 @@ k_means_figure = function(dge,
   #add GO terms, as necessary
   if(display_go_terms || return_go_terms)
   {
-    require(go_annotations, character.only = T) #load GO package using variable
+    library(go_annotations, character.only = T) #load GO package using variable
     #define universe as all detected genes in dataset
     all_counts = counts(dge, normalized = T)
     universe = rownames(all_counts[rowSums(all_counts) > 0, ])
@@ -235,7 +239,7 @@ k_means_figure = function(dge,
                     ID = id_type)
       
       #run Fisher test
-      test_results = getSigGroups(go_data, fisherTest)
+      test_results = topGO::getSigGroups(go_data, fisherTest)
       score = as.data.frame(score(test_results))
       colnames(score) = "pval"
       score = rownames_to_column(score, var = "go_id")
@@ -313,14 +317,14 @@ k_means_figure = function(dge,
   if(!is.null(customAnno) && display_go_terms == FALSE)
   {
     #pare down to genes in the matrix
-    customAnno = column_to_rownames(customAnno, var = annoJoinCol)
+    customAnno = tibble::column_to_rownames(customAnno, var = annoJoinCol)
     customAnno = customAnno[rownames(counts_mat), ]
     cluster_annos = customAnno
   } else if(is.null(customAnno) && display_go_terms == FALSE)
   {
     cluster_annos = NULL
   }
-  plot = pheatmap(counts_mat, 
+  plot = pheatmap::pheatmap(counts_mat, 
                   cluster_rows = F,
                   cluster_cols = cluster_columns,
                   clustering_method = "ward.D2",
@@ -337,14 +341,14 @@ k_means_figure = function(dge,
   output = list("plot" = plot, "genes" = NULL, "GO" = NULL)
   if(return_genes)
   {
-    require(biomaRt)
+    library(biomaRt)
     mart = useMart("ensembl", ensembl_db)
     conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
                  mart = mart)
-    kmeans_results = left_join(kmeans_results,
+    kmeans_results = dplyr::left_join(kmeans_results,
                                conv,
                            by = c("gene" = "ensembl_gene_id")) %>% 
-      arrange(cluster)
+      dplyr::arrange(cluster)
     output$genes = kmeans_results
   }
   if(return_go_terms)
