@@ -72,7 +72,7 @@ def import_testdata(testdata):
     
     else:
         print('Expects an .h5 or .h5ad file as input')
-        break
+        sys.exit()
     
     
     
