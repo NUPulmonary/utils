@@ -299,6 +299,13 @@ for level in range(1,6):
 if not os.path.exists(f"{dir_out}/objects"):
     os.makedirs(f"{dir_out}/objects")
 filtered_emb=combined_emb[combined_emb.obs.HLCA_or_query=='query']
+
+# address following error
+# Above error raised while writing key 'predicted_doublets' of <class 'h5py._hl.group.Group'> to /
+for col in filtered_emb.obs.columns:
+    if filtered_emb.obs[col].dtype=='category' or filtered_emb.obs[col].dtype=='object':
+        filtered_emb.obs[col]=filtered_emb.obs[col].astype('str')
+        
 filtered_emb.write_h5ad(f"{dir_out}/objects/{sample}_emb.h5ad")
 
 
