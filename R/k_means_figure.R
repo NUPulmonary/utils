@@ -317,9 +317,9 @@ k_means_figure = function(dge,
   if(!is.null(customAnno) && display_go_terms == FALSE)
   {
     #pare down to genes in the matrix
-    customAnno = tibble::column_to_rownames(customAnno, var = annoJoinCol)
-    customAnno = customAnno[rownames(counts_mat), ]
-    cluster_annos = customAnno
+    customAnno_tmp = tibble::column_to_rownames(customAnno, var = annoJoinCol)
+    customAnno_tmp = customAnno[rownames(counts_mat), ]
+    cluster_annos = customAnno_tmp
   } else if(is.null(customAnno) && display_go_terms == FALSE)
   {
     cluster_annos = NULL
@@ -341,14 +341,24 @@ k_means_figure = function(dge,
   output = list("plot" = plot, "genes" = NULL, "GO" = NULL)
   if(return_genes)
   {
-    library(biomaRt)
-    mart = useMart("ensembl", ensembl_db)
-    conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
-                 mart = mart)
-    kmeans_results = dplyr::left_join(kmeans_results,
-                               conv,
-                           by = c("gene" = "ensembl_gene_id")) %>% 
-      dplyr::arrange(cluster)
+    if(is.null(customAnno))
+    {
+      library(biomaRt)
+      mart = useMart("ensembl", ensembl_db)
+      conv = getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
+                   mart = mart)
+      kmeans_results = dplyr::left_join(kmeans_results,
+                                        conv,
+                                        by = c("gene" = "ensembl_gene_id")) %>% 
+        dplyr::arrange(cluster)
+    } else
+    {
+      kmeans_results = dplyr::left_join(kmeans_results,
+                                        customAnno,
+                                        by = c("gene" = "ensembl_gene_id")) %>% 
+        dplyr::arrange(cluster)
+    }
+    
     output$genes = kmeans_results
   }
   if(return_go_terms)
