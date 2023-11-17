@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for host in quser{21..24}; do
+for host in quser{31..34}; do
     if [[ $host == `hostname` ]]; then
         list=`screen -ls | head -n -2`
     else
