@@ -49,7 +49,7 @@ construct_goi_matrix = function(dge,
                           parallel = T,
                           fitType = fitType, 
                           minReplicatesForReplace = minReps)
-    deseq_results = as.data.frame(results(deseq_results))
+    deseq_results = as.data.frame(results(deseq_results, alpha = qval_cutoff, parallel = TRUE))
     genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff), baseMean > baseMeanCutoff)
   } else if(is.null(genes_of_interest))
   {
@@ -119,6 +119,7 @@ k_means_figure = function(dge,
                           colnames = F,
                           legend_factors = NULL,
                           go_annotations = "org.Mm.eg.db",
+                          go_ontology = "BP",
                           ensembl_db = "mmusculus_gene_ensembl",
                           cluster_columns = T,
                           return_genes = F,
@@ -230,7 +231,7 @@ k_means_figure = function(dge,
       selection = as.numeric(universe %in% cluster_genes)
       names(selection) = universe
       go_data = new("topGOdata", 
-                    ontology = "BP", 
+                    ontology = go_ontology, 
                     allGenes = selection,
                     geneSel = function(x){
                       return(x == 1)},
