@@ -56,14 +56,23 @@ reference_embedding = sc.read_h5ad(path_embedding)
 
 def import_testdata(testdata):
     # read in adata
-    query_data_full = sc.read_10x_h5(testdata)
-    query_data_full.var_names_make_unique()
     
-    # clean up .var.index (gene names)
-    query_data_full.var['gene_names'] = query_data_full.var.index
-    query_data_full.var.index = [idx.split("___")[-1] for idx in query_data_full.var.gene_ids]
-    # clean up cell barcodes:
-    query_data_full.obs.index = query_data_full.obs.index.str.rstrip("-1")
+    if testdata.endswith('.h5'):
+        query_data_full = sc.read_10x_h5(testdata)
+        query_data_full.var_names_make_unique()
+    
+        # clean up .var.index (gene names)
+        query_data_full.var['gene_names'] = query_data_full.var.index
+        query_data_full.var.index = [idx.split("___")[-1] for idx in query_data_full.var.gene_ids]
+        # clean up cell barcodes:
+        query_data_full.obs.index = query_data_full.obs.index.str.rstrip("-1")
+    
+    elif testdata.endswith('.h5ad'):
+        query_data_full = sc.read_h5ad(testdata)
+    
+    else:
+        print('Expects an .h5 or .h5ad file as input')
+        sys.exit()
     
     
     
@@ -84,9 +93,7 @@ def import_testdata(testdata):
     
     clean_genes=[]
     for idx in query_data_full.var.index:
-        if 'SARS2__' in idx:
-            clean_genes.append(idx.replace('SARS2__',''))
-        elif 'GRCh38' in idx:
+        if 'GRCh38' in idx:
             clean_genes.append(idx.replace('GRCh38_',''))
         else:
             clean_genes.append(idx)
@@ -292,6 +299,13 @@ for level in range(1,6):
 if not os.path.exists(f"{dir_out}/objects"):
     os.makedirs(f"{dir_out}/objects")
 filtered_emb=combined_emb[combined_emb.obs.HLCA_or_query=='query']
+
+# address following error
+# Above error raised while writing key 'predicted_doublets' of <class 'h5py._hl.group.Group'> to /
+for col in filtered_emb.obs.columns:
+    if filtered_emb.obs[col].dtype=='category' or filtered_emb.obs[col].dtype=='object':
+        filtered_emb.obs[col]=filtered_emb.obs[col].astype('str')
+        
 filtered_emb.write_h5ad(f"{dir_out}/objects/{sample}_emb.h5ad")
 
 
