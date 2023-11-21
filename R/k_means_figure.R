@@ -133,6 +133,7 @@ k_means_figure = function(dge,
                           random_seed = 12345,
                           custom_order = NULL,
                           tidy_go = FALSE,
+                          return_fold_enrichment = FALSE,
                           ...)
 {
   library(pheatmap)
@@ -241,13 +242,29 @@ k_means_figure = function(dge,
       
       #run Fisher test
       test_results = topGO::getSigGroups(go_data, fisherTest)
-      score = as.data.frame(score(test_results))
-      colnames(score) = "pval"
-      score = rownames_to_column(score, var = "go_id")
+      if(return_fold_enrichment == TRUE)
+      {
+        score = GenTable(go_data, 
+                         pval = test_results, 
+                         orderBy = "pval", 
+                         topNodes = length(test_results@score)) %>%  #generally just want all filtered terms; Inf returns error
+          dplyr::rename(go_id = GO.ID,
+                        description = Term) %>% 
+          mutate(padj = p.adjust(pval, method = "fdr"),
+                 fold_enrichment = Significant / Expected,
+                 term_coverage = Significant / Annotated,
+                 full_go = paste(go_id, description)) %>% #
+          dplyr::filter(padj < 0.05)
+      } else
+      {
+        score = as.data.frame(score(test_results))
+        colnames(score) = "pval"
+        score = rownames_to_column(score, var = "go_id")
       
-      #adjust p-values and take significant
-      score$padj = p.adjust(score$pval, method = "fdr")
-      score = subset(score, padj < 0.05)
+        #adjust p-values and take significant
+        score$padj = p.adjust(score$pval, method = "fdr")
+        score = subset(score, padj < 0.05)
+      }
       #in case of no significant go terms, return NULL
       if(nrow(score) == 0)
       {
