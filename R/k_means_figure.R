@@ -227,7 +227,7 @@ k_means_figure = function(dge,
     }
     
     clusters = unique(as.character(kmeans_results$cluster))
-    cluster_GO = mclapply(clusters, function(x){
+    cluster_GO = lapply(clusters, function(x){
       cluster_genes = kmeans_results[kmeans_results$cluster == x, "gene"]
       selection = as.numeric(universe %in% cluster_genes)
       names(selection) = universe
@@ -280,9 +280,7 @@ k_means_figure = function(dge,
         #add descriptions
         score$full_go = paste(score$go_id, score$description)
         return(score)
-       }},
-      mc.preschedule = T, 
-      mc.cores = getOption("mc.cores", cores))
+       }})
     
     if(display_go_terms)
     {
