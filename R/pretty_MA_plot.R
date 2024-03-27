@@ -11,6 +11,8 @@
 # genes: genes to subset to
 # highlight_genes: gene labels to highlight with larger text
 # custom_annotation: a custom gene conversion set (helpful for metagenomes); must be in biomart format
+# y_min: minimum value of y for resultant plot
+# y_max: maximum value of y for resultant plot
 
 pretty_MA_plot = function(results, 
                           convert_ids = T, 
@@ -24,6 +26,8 @@ pretty_MA_plot = function(results,
                           max_overlaps = 10,
                           label_alpha = 1,
                           label_text_size = (10 / .pt),
+                          y_min = NA,
+                          y_max = NA,
                           random_seed = 12345)
 {
   require(ggplot2)
@@ -99,6 +103,9 @@ pretty_MA_plot = function(results,
                                      "FALSE" = label_text_size))
   }
                                  
+  #edit ylim as necessary
+  plt = plt +
+    ylim(y_min, y_max)
   
   return(plt)
 }   

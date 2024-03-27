@@ -22,6 +22,8 @@
 #' @param random_seed for pretty_ma_plot
 #' @param pdf_width width of pdf in inches
 #' @param pdf_height height of pdf in inches
+#' @param y_min minimum value of y for resultant plots
+#' @param y_max maximum value of y for resultant plots
 #' @return a list of lists. "MA" is a list of ggplot2-editable MA plots. "hits" is a list of results objects.
 #' @export
 
@@ -32,7 +34,8 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
                               id_col = "row.names", mart_name = "mmusculus_gene_ensembl",
                               name_col = "row.names", lfc_threshold = 0, genes = NULL,
                               custom_annotation = NULL, max_overlaps = 10, label_alpha = 1,
-                              random_seed = 12345, pdf_width = 6, pdf_height = 4)
+                              random_seed = 12345, pdf_width = 6, pdf_height = 4,
+                              y_min = NA, y_max = NA)
 {
   library(DESeq2)
   library(parallel)
@@ -92,7 +95,8 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
                           id_col = id_col, mart_name = mart_name,
                           name_col = name_col, lfc_threshold = lfc_threshold, genes = genes,
                           custom_annotation = custom_annotation, max_overlaps = max_overlaps, 
-                          label_alpha = label_alpha, random_seed = random_seed)
+                          label_alpha = label_alpha, random_seed = random_seed,
+                          y_min = y_min, y_max = y_max)
     return(plot) })
   names(ma_plots) = names(res)
   
