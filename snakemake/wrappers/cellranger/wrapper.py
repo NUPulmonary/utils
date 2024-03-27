@@ -100,6 +100,7 @@ if mode == "gex+antibody":
     _, lib_path = tempfile.mkstemp()
     libraries.to_csv(lib_path, index=False)
     antibodies = os.path.realpath(antibodies)
+    print(libraries);
     input_arg = f"--libraries={lib_path}"
     feature_ref = f"--feature-ref=\"{antibodies}\""
     lib_msg = f"echo \"Created libraries.csv at {lib_path}\""

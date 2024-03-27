@@ -1,21 +1,26 @@
-# Simple R script to plot an annotated MA plot 
-# for a DESeq2-style DEA results table
-# 
-# Arguments
-# results: DESeq2 results() output, can be pre-cast as data frame or not
-# convert_ids: whether or not to convert from ensembl gene IDs to gene symbol
-# id_col: the name of the column in your df with ensembl ids. By default, just uses rownames
-# mart_name: the name of the biomart library to use. Defaults to mouse, ensembl 
-# name_col: the name of the column with gene symbols to be used for plotting. Ignored if convert_ids = T
-# lfc_threshold: the minimum absolute log2 fold-change for labeling. Defaults to 0 (all significant genes)
-# genes: genes to subset to
-# highlight_genes: gene labels to highlight with larger text
-# custom_annotation: a custom gene conversion set (helpful for metagenomes); must be in biomart format
-# y_min: minimum value of y for resultant plot
-# y_max: maximum value of y for resultant plot
+#' Simple R script to plot an annotated MA plot for a DESeq2-style DEA results table
+#' 
+#' @param results DESeq2 results() output, can be pre-cast as data frame or not
+#' @param convert_ids whether or not to convert from ensembl gene IDs to gene symbol
+#' @param id_col the name of the column in your df with ensembl ids. By default, just uses rownames
+#' @param mart_name the name of the biomart library to use. Defaults to mouse, ensembl 
+#' @param name_col the name of the column with gene symbols to be used for plotting. Ignored if convert_ids = T
+#' @param lfc_threshold the minimum absolute log2 fold-change for labeling. Defaults to 0 (all significant genes)
+#' @param genes genes to subset to
+#' @param highlight_genes gene labels to highlight with larger text
+#' @param custom_annotation a custom gene conversion set (helpful for metagenomes); must be in biomart format
+#' @param max_overlaps passed to geom_label_repel()
+#' @param random_seed passed to geom_label_repel
+#' @param label_alpha alpha value for gene labels
+#' @param label_text_size text size of gene labels
+#' @param y_min minimum value of y for resultant plot
+#' @param y_max maximum value of y for resultant plot
+#' @param label_only_sig if true, label only significant genes from 'genes' argument
+#' @return an MA plot generated in ggplot2
+#' @export
 
 pretty_MA_plot = function(results, 
-                          convert_ids = T, 
+                          convert_ids = TRUE, 
                           id_col = "row.names",
                           mart_name = "mmusculus_gene_ensembl",
                           name_col = "row.names",
@@ -28,6 +33,7 @@ pretty_MA_plot = function(results,
                           label_text_size = (10 / .pt),
                           y_min = NA,
                           y_max = NA,
+                          label_only_sig = FALSE,
                           random_seed = 12345)
 {
   require(ggplot2)
@@ -86,6 +92,13 @@ pretty_MA_plot = function(results,
                                    "FALSE" = label_text_size))
   } else
   {
+    if(label_only_sig == TRUE)
+    {
+      hits = results %>% 
+        dplyr::filter(padj < 0.05) %>% 
+        .$external_gene_name
+      genes = intersect(genes, hits)
+    }
     plt = plt + 
       geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange > 0),
                        aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
