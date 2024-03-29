@@ -35,7 +35,7 @@ if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
   GEX_FASTQS = config['gex_fastqs']
   if GEX_FASTQS == "" or GEX_FASTQS is None:
     GEX_FASTQS = None
-else if MODE != 'demult_only' and INPUT_FASTQ_TYPE == 'gex':
+elif MODE != 'demult_only' and INPUT_FASTQ_TYPE == 'gex':
   GEX_FASTQS = config['gex_fastqs']
   if GEX_FASTQS == "" or GEX_FASTQS is None:
     GEX_FASTQS = None
