@@ -11,13 +11,13 @@ CELLRANGER_DIR = config['cellranger_dir']
 INCLUDE_INTRONS = config['include_introns']
 
 #optional flags
-if additional_flags_mkfastq in config:
+if 'additional_flags_mkfastq' in config:
    ADDITIONAL_FLAGS_MKFASTQ = config['additional_flags_mkfastq']
    if ADDITIONAL_FLAGS_MKFASTQ == "" or ADDITIONAL_FLAGS_MKFASTQ is None:
      ADDITIONAL_FLAGS_MKFASTQ = None
 else:
   ADDITIONAL_FLAGS_MKFASTQ = None
-if additional_flags_cellranger in config:
+if 'additional_flags_cellranger' in config:
    ADDITIONAL_FLAGS_CELLRANGER = config['additional_flags_cellranger']
    if ADDITIONAL_FLAGS_CELLRANGER == "" or ADDITIONAL_FLAGS_CELLRANGER is None:
       ADDITIONAL_FLAGS_CELLRANGER = None
