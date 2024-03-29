@@ -9,10 +9,20 @@ SAMPLE_CSV_PATH = config['sample_csv_path']
 INPUT_FASTQ_TYPE = config['input_fastq_type']
 CELLRANGER_DIR = config['cellranger_dir']
 INCLUDE_INTRONS = config['include_introns']
-ADDITIONAL_FLAGS_MKFASTQ = config['additional_flags_mkfastq']
-ADDITIONAL_FLAGS_CELLRANGER = config['additional_flags_cellranger']
 
-
+#optional flags
+if additional_flags_mkfastq in config:
+   ADDITIONAL_FLAGS_MKFASTQ = config['additional_flags_mkfastq']
+   if ADDITIONAL_FLAGS_MKFASTQ == "" or ADDITIONAL_FLAGS_MKFASTQ is None:
+     ADDITIONAL_FLAGS_MKFASTQ = None
+else:
+  ADDITIONAL_FLAGS_MKFASTQ = None
+if additional_flags_cellranger in config:
+   ADDITIONAL_FLAGS_CELLRANGER = config['additional_flags_cellranger']
+   if ADDITIONAL_FLAGS_CELLRANGER == "" or ADDITIONAL_FLAGS_CELLRANGER is None:
+      ADDITIONAL_FLAGS_CELLRANGER = None
+else:
+  ADDITIONAL_FLAGS_CELLRANGER = None
 
 if MODE != 'demult_only':
   TRANSCRIPTOME = config['transcriptome']
