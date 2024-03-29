@@ -9,6 +9,10 @@ SAMPLE_CSV_PATH = config['sample_csv_path']
 INPUT_FASTQ_TYPE = config['input_fastq_type']
 CELLRANGER_DIR = config['cellranger_dir']
 INCLUDE_INTRONS = config['include_introns']
+ADDITIONAL_FLAGS_MKFASTQ = config['additional_flags_mkfastq']
+ADDITIONAL_FLAGS_CELLRANGER = config['additional_flags_cellranger']
+
+
 
 if MODE != 'demult_only':
   TRANSCRIPTOME = config['transcriptome']
@@ -16,14 +20,14 @@ if MODE != 'demult_only':
 if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
   ANTIBODIES = config['antibodies']
   #handle empty param
-  if ANTIBODIES == "" or ANTIBODIES == None:
+  if ANTIBODIES == "" or ANTIBODIES is None:
     ANTIBODIES = None
   GEX_FASTQS = config['gex_fastqs']
-  if GEX_FASTQS == "" or GEX_FASTQS == None:
+  if GEX_FASTQS == "" or GEX_FASTQS is None:
     GEX_FASTQS = None
 else:
   GEX_FASTQS = config['gex_fastqs']
-  if GEX_FASTQS == "" or GEX_FASTQS == None:
+  if GEX_FASTQS == "" or GEX_FASTQS is None:
     GEX_FASTQS = None
   else:
     GEX_FASTQS = GEX_FASTQS.split(' ')
@@ -62,6 +66,7 @@ rule demultiplex:
         slurm__mem=40,
         cellranger_dir=CELLRANGER_DIR,
         keep_cellranger_output=True,
+        additional_flags_mkfastq=ADDITIONAL_FLAGS_MKFASTQ
     wrapper:
         f"file://{WRAPPER_DIR}/mkfastq"
 
@@ -83,7 +88,8 @@ if MODE != 'demult_only':
           cellranger_dir=CELLRANGER_DIR,
           sample_csv_path = SAMPLE_CSV_PATH,
           gex_fastqs = GEX_FASTQS,
-          include_introns = INCLUDE_INTRONS
+          include_introns = INCLUDE_INTRONS,
+          additional_flags_cellranger=ADDITIONAL_FLAGS_CELLRANGER
       wrapper:
           f"file://{WRAPPER_DIR}/cellranger"
 

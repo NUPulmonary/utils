@@ -12,6 +12,7 @@ run_id = snakemake.wildcards.get("run_id", None)
 cellranger_dir = snakemake.params.get("cellranger_dir", "")
 rc_i2_override = snakemake.params.get("r2_i2_override", None)
 keep_output = snakemake.params.get("keep_cellranger_output", False)
+additional_args = snakemake.params.get("additional_flags_mkfastq", "")
 
 assert len(input) == 2, "expecting 2 inputs: bcl directory and sample sheet"
 assert run_id is not None, "run_id is a required wildcard"
@@ -62,7 +63,9 @@ shell(
     {cellranger_dir}cellranger mkfastq --run="{input[0]}" \
         --csv="{input[1]}" \
         {rc_i2_override} \
-        --output-dir="{output[0]}" {log}
+        --output-dir="{output[0]}" \
+        {additional_args} \
+        {log}
 
     {rm_output}
     """

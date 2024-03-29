@@ -20,6 +20,7 @@ skip_sample = snakemake.params.get("skip_sample", False)
 sample_csv_path = snakemake.params.get("sample_csv_path", None)
 expected_cells = snakemake.params.get("n_cells", None)
 include_introns = snakemake.params.get("include_introns", None)
+additional_args = snakemake.params.get("additional_flags_cellranger", "")
 
 input_fastq_type = snakemake.params.get("input_fastq_type", "gex")
 gex_fastqs = snakemake.params.get("gex_fastqs", None)
@@ -138,6 +139,7 @@ shell(
         {input_arg} \
         {feature_ref} \
         {expected_cells_arg} \
+        {additional_args} \
         {log}
     """
 )
