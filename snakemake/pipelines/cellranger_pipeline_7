@@ -8,7 +8,6 @@ DATA_DIR = config['data_dir']
 SAMPLE_CSV_PATH = config['sample_csv_path'] 
 INPUT_FASTQ_TYPE = config['input_fastq_type']
 CELLRANGER_DIR = config['cellranger_dir']
-INCLUDE_INTRONS = config['include_introns']
 
 #optional flags
 if 'additional_flags_mkfastq' in config:
@@ -26,6 +25,7 @@ else:
 
 if MODE != 'demult_only':
   TRANSCRIPTOME = config['transcriptome']
+  INCLUDE_INTRONS = config['include_introns']
   
 if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
   ANTIBODIES = config['antibodies']
