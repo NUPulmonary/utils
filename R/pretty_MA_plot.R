@@ -117,8 +117,11 @@ pretty_MA_plot = function(results,
   }
                                  
   #edit ylim as necessary
-  plt = plt +
-    ylim(y_min, y_max)
+  if(!is.na(y_min) && !is.na(y_max))
+  {
+    plt = plt +
+      ylim(y_min, y_max)
+  }
   
   return(plt)
 }   
