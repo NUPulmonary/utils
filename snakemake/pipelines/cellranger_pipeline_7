@@ -31,7 +31,6 @@ else:
 if MODE != 'demult_only':
   TRANSCRIPTOME = config['transcriptome']
   INCLUDE_INTRONS = config['include_introns']
-  INPUT_FASTQ_TYPE = config['input_fastq_type']
   
 if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
   ANTIBODIES = config['antibodies']
