@@ -21,6 +21,12 @@ if 'additional_flags_cellranger' in config:
       ADDITIONAL_FLAGS_CELLRANGER = ""
 else:
   ADDITIONAL_FLAGS_CELLRANGER = ""
+if 'input_fastq_type' in config:
+   INPUT_FASTQ_TYPE = config['input_fastq_type']
+   if INPUT_FASTQ_TYPE == "" or INPUT_FASTQ_TYPE is None:
+     INPUT_FASTQ_TYPE = None
+else:
+  INPUT_FASTQ_TYPE = None
 
 if MODE != 'demult_only':
   TRANSCRIPTOME = config['transcriptome']
