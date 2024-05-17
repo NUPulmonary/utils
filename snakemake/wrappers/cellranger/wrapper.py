@@ -88,10 +88,20 @@ if mode == "gex+antibody":
             "library_type": list(sample_types.keys())
         })
     else:  # same name option
+        # Sample name logic:
+        # 1. If `input_fastq_type` is `antibody`, and in `input_paths` some fastq files
+        #    start with FBC, then `sample` is dependent on the sample type and we
+        #    need to handle that.
+        # 2. Else, just use the same `sample` for all.
+        samples = [sample] * len(input_paths) + [sample] * len(gex_fastqs)
+        if sample.startswith("SC") and input_fastq_type == "antibody":
+            if any([p.startswith("FBC") for p in os.listdir(input_paths[0])]):
+                antibody_sample = "FBC" + sample[2:]
+                samples = [antibody_sample] * len(input_paths) + [sample] * len(gex_fastqs)
         n_fastq = len(input_paths) + len(gex_fastqs)
         libraries = pd.DataFrame({
             "fastqs": input_paths + gex_fastqs,
-            "sample": sample,
+            "sample": samples,
             "library_type": [input_fastq_type] * len(input_paths) + ["gex"] * len(gex_fastqs),
         })
     libraries.library_type.replace({
