@@ -1,27 +1,24 @@
-#function to automatically generate an optimized k means plot
-#optionally, with GO terms for each cluster
-# dge: a DESeq2 dataset with DEA already run
-# qval_cutoff: maximum q-value to be considered significant
-# genes_of_interest: a vector of genes to consider (overrides other options)
-# display_go_terms: whether or not to display go terms for each cluster
-# max_go_terms: maximum number of significant GO terms to display for each cluster
-# design: a character representation of the design for an ANOVA-like test (LRT)
-# cores: number of cores to run in parallel
-# max_k: maximum value of k to consider
-# actual k to use in final plot
-# colnames: whether or not to display column labels in heatmap
-# legend_factors: vector of factors to add to heatmap legend (must be in des metadata)
-# tidy_go: if true, join go terms into a tidy data frame
-
-#for extracting counts for genes of interest from a DESeqDataSet
+#' Function for extracting counts for genes of interest from a DESeqDataSet (used internally)
+#' 
+#' @param dge a DESeq2 dataset with DEA already run
+#' @param qval_cutoff maximum q-value to be considered significant
+#' @param genes_of_interest a vector of genes to consider (overrides other options)
+#' @param design a character representation of the design for an ANOVA-like test (LRT)
+#' @param cores number of cores to run in parallel
+#' @param fit_type fitType from DESeq2: "either "parametric", "local", or "mean" for the type of fitting of dispersions to the mean intensity. See estimateDispersions for description."
+#' @param min_replicates_for_replace minReplicatesForReplace from DESeq2, "the minimum number of replicates required in order to use replaceOutliers on a sample. If there are samples with so many replicates, the model will be refit after these replacing outliers, flagged by Cook's distance. Set to Inf in order to never replace outliers."
+#' @param base_mean_cutoff the minimum mean number of counts for a gene to be included in the final matrix/plot
+#' 
+#' @return a list containing: "plot", the heatmap; "genes", gene cluster assignments; "GO", GO enrichment for each cluster (optional)
+#' @export
 construct_goi_matrix = function(dge,
                                 qval_cutoff = 0.05,
                                 genes_of_interest = NULL,
                                 design = NULL,
                                 cores = 1,
-                                fitType = "local",
-                                minReps = 7,
-                                baseMeanCutoff = 0)
+                                fit_type = "local",
+                                min_replicates_for_replace = 7,
+                                base_mean_cutoff = 0)
 {
   
  if(cores > 1)
@@ -47,10 +44,10 @@ construct_goi_matrix = function(dge,
                           test = "LRT", 
                           reduced = ~ 1,
                           parallel = T,
-                          fitType = fitType, 
-                          minReplicatesForReplace = minReps)
+                          fitType = fit_type, 
+                          minReplicatesForReplace = min_replicates_for_replace)
     deseq_results = as.data.frame(results(deseq_results, alpha = qval_cutoff, parallel = TRUE))
-    genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff), baseMean > baseMeanCutoff)
+    genes_of_interest = rownames(subset(deseq_results, padj < qval_cutoff), baseMean > base_mean_cutoff)
   } else if(is.null(genes_of_interest))
   {
     genes_of_interest = rownames(counts_mat)
@@ -66,15 +63,29 @@ construct_goi_matrix = function(dge,
 }
   
 
-#for heuristically determining an ideal k (run this first)
+#' Function heuristically determining an ideal k
+#' 
+#' @param dge a DESeq2 dataset with DEA already run
+#' @param qval_cutoff maximum q-value to be considered significant
+#' @param genes_of_interest a vector of genes to consider (overrides other options)
+#' @param design a character representation of the design for an ANOVA-like test (LRT)
+#' @param cores number of cores to run in parallel
+#' @param random_seed random seed for kmeans
+#' @param fit_type fitType from DESeq2: "either "parametric", "local", or "mean" for the type of fitting of dispersions to the mean intensity. See estimateDispersions for description."
+#' @param max_k maximum value of k to consider
+#' @param min_replicates_for_replace minReplicatesForReplace from DESeq2, "the minimum number of replicates required in order to use replaceOutliers on a sample. If there are samples with so many replicates, the model will be refit after these replacing outliers, flagged by Cook's distance. Set to Inf in order to never replace outliers."
+#' 
+#' @return a list containing: "plot", the heatmap; "genes", gene cluster assignments; "GO", GO enrichment for each cluster (optional)
+#' @export
 k_elbow = function(dge,
                    qval_cutoff = 0.05,
                    genes_of_interest = NULL,
                    design = NA,
                    cores = 1,
                    random_seed = 12345,
+                   fit_type = "local",
                    max_k = 50,
-                   minReps = 7) #this is the default for DESeq2
+                   min_replicates_for_replace = 7) #this is the default for DESeq2
 {
   library(ggplot2)
   library(tidyverse)
@@ -85,7 +96,8 @@ k_elbow = function(dge,
                                     genes_of_interest = genes_of_interest,
                                     design = design,
                                     cores = cores,
-                                    minReps = minReps)
+                                    fit_type = fit_type,
+                                    min_replicates_for_replace = min_replicates_for_replace)
   
   #now run kmeans for all values of k, and find sums of squared differences within each cluster for each k
   sums_of_squares = mclapply(1:max_k, function(k){
@@ -106,13 +118,50 @@ k_elbow = function(dge,
   
   return(plot)
 }
-      
+
+
+#' Function to automatically generate an optimized k means plot
+#' Optionally, with GO terms for each cluster
+#' 
+#' @param dge a DESeq2 dataset with DEA already run
+#' @param qval_cutoff maximum q-value to be considered significant
+#' @param genes_of_interest a vector of genes to consider (overrides other options)
+#' @param design a character representation of the design for an ANOVA-like test (LRT)
+#' @param cores number of cores to run in parallel
+#' @param k number of clusters for kmeans (k)
+#' @param fit_type fitType from DESeq2: "either "parametric", "local", or "mean" for the type of fitting of dispersions to the mean intensity. See estimateDispersions for description."
+#' @param display_go_terms whether or not to display go terms for each cluster
+#' @param return_go_terms whether or not to export GO terms in the resultant list
+#' @param max_go_terms maximum number of significant GO terms to display for each cluster
+#' @param max_k maximum value of k to consider
+#' @param colnames whether or not to display column labels in heatmap
+#' @param legend_factors vector of factors to add to heatmap legend (must be in des metadata)
+#' @param go_annotations the complete name of the GO annotations package to use, e.g. "org.Mm.eg.db"
+#' @param go_ontology the go category to use, e.g. "BP" for biological process
+#' @param ensembl_db the ensembl database to use, including organism, e.g. "mmusculus_gene_ensembl"
+#' @param cluster_columns whether or not to perform hierarchical clustering on columns
+#' @param return_genes whether or not to return the gene cluster assignments in the resultant list
+#' @param label_fontsize font size for row labels
+#' @param min_replicates_for_replace minReplicatesForReplace from DESeq2, "the minimum number of replicates required in order to use replaceOutliers on a sample. If there are samples with so many replicates, the model will be refit after these replacing outliers, flagged by Cook's distance. Set to Inf in order to never replace outliers."
+#' @param sort_columns whether or not to sort columns by a provided factor. Not compatible with hierarchical clustering.
+#' @param column_sort_factors if sort_columns is TRUE, a vector of metadata values to order the columns by
+#' @param custom_annotation an optional dataframe linking gene IDs to gene names. Overrides ensembl_db
+#' @param annotation_join_column the column to bind a custom annotation to gene IDs in the dataset, e.g. "ensembl_gene_id"
+#' @param base_mean_cutoff the minimum mean number of counts for a gene to be included in the final matrix/plot
+#' @param random_seed random seed for kmeans
+#' @param custom_order optional vector of cluster numbers (for kmeans) to reorder clusters vertically
+#' @param tidy_go if true, join go terms into a tidy data frame
+#' @param return_fold_enrichment for GO, whether or not to include the fold-enrichment of each go term in the resultant dataß
+#' 
+#' @return a list containing: "plot", the heatmap; "genes", gene cluster assignments (optional); "GO", GO enrichment for each cluster (optional)
+#' @export
 k_means_figure = function(dge,
                           qval_cutoff = 0.05,
                           genes_of_interest = NULL,
                           design = NA,
                           cores = 1,
                           k,
+                          fit_type = "local",
                           display_go_terms = T,
                           return_go_terms = F,
                           max_go_terms = 5,
@@ -124,19 +173,19 @@ k_means_figure = function(dge,
                           cluster_columns = T,
                           return_genes = F,
                           label_fontsize = 6,
-                          minReps = 7,
-                          sortColumns = F,
+                          min_replicates_for_replace = 7,
+                          sort_columns = F,
                           column_sort_factors = NA,
-                          customAnno = NULL,
-                          annoJoinCol = NA,
-                          baseMeanCutoff = 0,
+                          custom_annotation = NULL,
+                          annotation_join_column = NA,
+                          base_mean_cutoff = 0,
                           random_seed = 12345,
                           custom_order = NULL,
                           tidy_go = FALSE,
                           return_fold_enrichment = FALSE,
                           ...)
 {
-  library(pheatmap)
+  library(ComplexHeatmap)
   library(RColorBrewer)
   library(topGO)
   library(GO.db)
@@ -148,7 +197,8 @@ k_means_figure = function(dge,
                                     genes_of_interest = genes_of_interest,
                                     design = design,
                                     cores = cores,
-                                    minReps = minReps)
+                                    fit_type = fit_type,
+                                    min_replicates_for_replace = min_replicates_for_replace)
   
   set.seed(random_seed)
   kmeans_results = as.data.frame(kmeans(x = counts_mat,
@@ -175,7 +225,7 @@ k_means_figure = function(dge,
   
   #if requested, sort columns by any number of factors
   md = as.data.frame(colData(dge))
-  if(sortColumns)
+  if(sort_columns)
   {
     columns_sorted = md %>% 
       dplyr::arrange_(.dots = column_sort_factors)
@@ -330,13 +380,13 @@ k_means_figure = function(dge,
       }
     }
   }
-  if(!is.null(customAnno) && display_go_terms == FALSE)
+  if(!is.null(custom_annotation) && display_go_terms == FALSE)
   {
     #pare down to genes in the matrix
-    customAnno_tmp = tibble::column_to_rownames(customAnno, var = annoJoinCol)
-    customAnno_tmp = customAnno[rownames(counts_mat), ]
-    cluster_annos = customAnno_tmp
-  } else if(is.null(customAnno) && display_go_terms == FALSE)
+    custom_annotation_tmp = tibble::column_to_rownames(custom_annotation, var = annotation_join_column)
+    custom_annotation_tmp = custom_annotation[rownames(counts_mat), ]
+    cluster_annos = custom_annotation_tmp
+  } else if(is.null(custom_annotation) && display_go_terms == FALSE)
   {
     cluster_annos = NULL
   }
@@ -357,7 +407,7 @@ k_means_figure = function(dge,
   output = list("plot" = plot, "genes" = NULL, "GO" = NULL)
   if(return_genes)
   {
-    if(is.null(customAnno))
+    if(is.null(custom_annotation))
     {
       library(biomaRt)
       mart = useMart("ensembl", ensembl_db)
@@ -370,7 +420,7 @@ k_means_figure = function(dge,
     } else
     {
       kmeans_results = dplyr::left_join(kmeans_results,
-                                        customAnno,
+                                        custom_annotation,
                                         by = c("gene" = "ensembl_gene_id")) %>% 
         dplyr::arrange(cluster)
     }
@@ -409,5 +459,3 @@ k_means_figure = function(dge,
   
   return(output)
 }
-  
-  
