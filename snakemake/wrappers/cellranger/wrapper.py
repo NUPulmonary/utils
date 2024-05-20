@@ -8,6 +8,7 @@ import tempfile
 import warnings
 import pandas as pd
 from snakemake.shell import shell
+import re
 
 input = snakemake.input
 output = snakemake.output
@@ -36,6 +37,7 @@ if expected_cells is None and sample_csv_path is not None:
 # gex
 # antibody
 # gex+antibody
+# gex+antibody_manual_demult: for when both have been fully demultiplexed manually already
 # see https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/feature-bc-analysis
 mode = "gex"
 
@@ -51,8 +53,11 @@ elif input_fastq_type == "gex+antibody":
     assert antibodies is not None, "param antibodies is required for this mode of cellranger count"
     assert sample_types is not None, "param sample_types is required for this model of cellranger count"
     mode = "gex+antibody"
+elif input_fastq_type == "gex+antibody_manual_demult":
+    assert antibodies is not None, "param antibodies is required for this mode of cellranger count"
+    mode = "gex+antibody_manual_demult"
 else:
-    raise ValueError(f"Unrecognized input_fastq_type value `{input_fastq_type}', expected gex, antibody, gex+antibody")
+    raise ValueError(f"Unrecognized input_fastq_type value `{input_fastq_type}', expected gex, antibody, gex+antibody, gex+antibody_manual_demult")
 
 assert transcriptome is not None, "param transcriptome is required"
 assert chemistry is not None, "param chemistry is required"
@@ -108,6 +113,19 @@ if mode == "gex+antibody":
         "gex": "Gene Expression",
         "antibody": "Antibody Capture",
     }, inplace=True)
+    _, lib_path = tempfile.mkstemp()
+    libraries.to_csv(lib_path, index=False)
+    antibodies = os.path.realpath(antibodies)
+    print(libraries);
+    input_arg = f"--libraries={lib_path}"
+    feature_ref = f"--feature-ref=\"{antibodies}\""
+    lib_msg = f"echo \"Created libraries.csv at {lib_path}\""
+
+elif mode == "gex+antibody_manual_demult":
+    #rare cases when both gex AND antibody are demultiplexed by hand
+    #here the sample sheet is already good to go
+    sample_short = re.sub("SC|FBC", "", sample)
+    samples_subset = samples[samples["sample"].str.contains(sample_short)]
     _, lib_path = tempfile.mkstemp()
     libraries.to_csv(lib_path, index=False)
     antibodies = os.path.realpath(antibodies)
