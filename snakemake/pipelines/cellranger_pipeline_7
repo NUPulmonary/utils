@@ -92,7 +92,7 @@ if MODE == 'manual_demult':
   rule cellranger:
       input: 
           #slightly different CSV structure here
-          lambda x: [f"{DATA_DIR}/fastq-run/{r}" for r in SAMPLES.fastqs[SAMPLES["sample"] == x.sample].values]
+          lambda x: [SAMPLES.fastqs[SAMPLES["sample"] == x.sample].values]
       output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
       params:
           slurm__account="b1042",
@@ -106,7 +106,6 @@ if MODE == 'manual_demult':
           transcriptome=TRANSCRIPTOME,
           cellranger_dir=CELLRANGER_DIR,
           sample_csv_path = SAMPLE_CSV_PATH,
-          gex_fastqs = GEX_FASTQS,
           include_introns = INCLUDE_INTRONS,
           additional_flags_cellranger=ADDITIONAL_FLAGS_CELLRANGER
       wrapper:
