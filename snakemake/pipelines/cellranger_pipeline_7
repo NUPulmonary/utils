@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import re
 
 MODE = config['mode']
 WRAPPER_DIR = "/home/rag0151/utils/snakemake/wrappers"
@@ -134,7 +135,17 @@ elif MODE != 'demult_only':
       wrapper:
           f"file://{WRAPPER_DIR}/cellranger"
 
-if MODE != 'demult_only':
+if MODE == 'manual_demult':
+  rule metrics_summary:
+      #treat SC and FBC as same sample
+      input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES["sample"][SAMPLES["sample"].str.contains("SC")].unique())
+      output: "{dir}/cellranger/metrics_summary.csv"
+      params:
+          slurm__skip=True
+      wrapper:
+          f"file://{WRAPPER_DIR}/metrics_summary"
+
+elif MODE != 'demult_only':
   rule metrics_summary:
       input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
       output: "{dir}/cellranger/metrics_summary.csv"
