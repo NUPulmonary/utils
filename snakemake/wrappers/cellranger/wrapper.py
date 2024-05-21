@@ -125,7 +125,7 @@ elif mode == "gex+antibody_manual_demult":
     #rare cases when both gex AND antibody are demultiplexed by hand
     #here the sample sheet is already good to go
     sample_short = re.sub("SC|FBC", "", sample)
-    samples_subset = samples[samples["sample"].str.contains(sample_short)]
+    libraries = samples[samples["sample"].str.contains(sample_short)]
     _, lib_path = tempfile.mkstemp()
     libraries.to_csv(lib_path, index=False)
     antibodies = os.path.realpath(antibodies)
