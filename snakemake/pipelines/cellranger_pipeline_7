@@ -92,7 +92,8 @@ if MODE == 'manual_demult':
   rule cellranger:
       input: 
           #slightly different CSV structure here
-          lambda x: [f"{r}" for r in SAMPLES.fastqs[SAMPLES["sample"] == x.sample].values]
+          sample_short = re.sub("SC|FBC", "", sample)
+          lambda x: [f"{r}" for r in SAMPLES.fastqs[SAMPLES["sample"].str.contains(sample_short)].unique()]
       output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
       params:
           slurm__account="b1042",
