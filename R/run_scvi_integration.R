@@ -66,7 +66,19 @@ run_SCVI_integration = function(object,
   
   #get variable features (assume already calculated with method of choice)
   top_n = head(VariableFeatures(object), hvgs)
-  object_scvi = object[top_n, ]
+  #subsetting in Seurat 5 is extremely weird. Handle as necessary
+  if(substring(packageVersion("Seurat"), 1, 1) <= 4) #version 4 and below
+  {
+    object_scvi = object[top_n, ]
+  } else #version 5 and up
+  {
+    object_scvi = object
+    object_scvi[[DefaultAssay(object_scvi)]] = subset(object_scvi[[DefaultAssay(object_scvi)]], features = top_n)
+    if(DefaultAssay(object_scvi) != "RNA")
+    {
+      object_scvi[["RNA"]] = subset(object_scvi[["RNA"]], features = top_n)
+    }
+  }
   
   #convert to annData object
   annData = convertFormat(object_scvi, 
