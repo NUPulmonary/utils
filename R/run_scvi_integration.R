@@ -54,6 +54,7 @@ run_SCVI_integration = function(object,
   #import python packages
   sc = import('scanpy', convert = FALSE)
   scvi = import('scvi', convert = FALSE)
+  scipy = import('scipy', convert = FALSE)
   
   scvi$settings$progress_bar_style = 'tqdm'
   scvi$settings$seed = as.integer(random_seed) #causes scvi error unless cast
@@ -86,6 +87,7 @@ run_SCVI_integration = function(object,
                           to="anndata", 
                           main_layer="counts", 
                           drop_single_values=FALSE)
+  annData$X = scipy$sparse$csr_matrix(annData$X)
   
   #create model
   scvi$model$SCVI$setup_anndata(annData, batch_key = batch_col)
