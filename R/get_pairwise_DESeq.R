@@ -1,7 +1,8 @@
 #' Function to make all pairwise comparisons for DESeq2 DEA
 #' 
 #' @param des DESeq2 object with or without DESeq() function already performed (will be rerun either way).
-#' @param comparison_col column to use for DEA. Deafult (NA) will use the current design
+#' @param change_design if true, design(des) is changed to ~comparison_col. FALSE will use the current design.
+#' @param comparison_col column to use for DEA. Defaults to as.character(design(des))[2].
 #' @param fit_type DESeq2 dispersion fitting model
 #' @param min_reps_replacement minimum number of replicates for gene replacement in DESeq2
 #' @param sort_direction sort in ascending or descending alphanumeric order? 
@@ -28,7 +29,7 @@
 #' @return a list of lists. "MA" is a list of ggplot2-editable MA plots. "hits" is a list of results objects.
 #' @export
 
-get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric", 
+get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fit_type = "parametric", 
                               min_reps_replacement = 7, sort_direction = c("factor_order", "ascending", "descending"),
                               save_csv = F, save_pdf = F, df_output = F, 
                               output_directory = NA, cores = 1, convert_ids = T, 
@@ -52,8 +53,14 @@ get_pairwise_DESeq = function(des, comparison_col = NA, fit_type = "parametric",
   #evaluate sort direction
   sort_direction = match.arg(sort_direction)
   
+  #assume one-factor design if not specified
+  if(is.na(comparison_col))
+  {
+    comparison_col = as.character(design(des))[2]
+  }
+  
   #if user wants design change
-  if(!is.na(comparison_col))
+  if(change_design == TRUE)
   {
     design(des) = as.formula(paste0("~", comparison_col))
   }
