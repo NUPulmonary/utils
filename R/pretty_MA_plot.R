@@ -16,6 +16,7 @@
 #' @param y_min minimum value of y for resultant plot
 #' @param y_max maximum value of y for resultant plot
 #' @param label_only_sig if true, label only significant genes from 'genes' argument
+#' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE.
 #' @return an MA plot generated in ggplot2
 #' @export
 
@@ -34,13 +35,11 @@ pretty_MA_plot = function(results,
                           y_min = NA,
                           y_max = NA,
                           label_only_sig = FALSE,
+                          label_oor = FALSE,
                           random_seed = 12345)
 {
-  require(ggplot2)
   require(ggrepel)
   require(biomaRt)
-  require(dplyr)
-  require(tibble)
   require(tidyverse)
   
   if(convert_ids) #from ensembl to common symbols
@@ -56,15 +55,31 @@ pretty_MA_plot = function(results,
   results = results %>% 
     mutate(color = factor(case_when(padj >= 0.05 ~ "NS",
                                     padj < 0.05 & log2FoldChange > 0 ~ "upregulated",
-                                    padj < 0.05 & log2FoldChange < 0 ~ "downregulated")))
+                                    padj < 0.05 & log2FoldChange < 0 ~ "downregulated")),
+           #effectively ignored if label_oor == FALSE, but label for later shape change
+           oor = factor(case_when(log2FoldChange > y_max ~ "OOR High",
+                                  log2FoldChange < y_min ~ "OOR Low",
+                                  TRUE ~ "In Range")))
+  
+  #set to outliers to min/max yval
+  if(label_oor == TRUE)
+  {
+    results = results %>% 
+      dplyr::mutate(log2FoldChange = case_when(oor == "OOR High" ~ y_max,
+                                               oor == "OOR Low" ~ y_min,
+                                               oor == "In Range" ~ log2FoldChange))
+  }
   
   plt = ggplot(results, 
                aes(x = baseMean, y = log2FoldChange)) +
-    geom_point(aes(color = color)) +
+    geom_point(aes(color = color, shape = oor)) +
     scale_x_log10(limits = c(1, NA)) +
     scale_color_manual(values = c("NS" = alpha(colour = "grey50", alpha = 0.05),
                                   "upregulated" = "firebrick4",
                                   "downregulated" = "dodgerblue4")) +
+    scale_shape_manual(values = c("In Range" = 19,
+                                  "OOR High" = 2,
+                                  "OOR Low" = 6)) +
     theme_bw(base_family = "Arial") +
     theme(legend.position = "none") + 
     xlab("Mean Expression") +
