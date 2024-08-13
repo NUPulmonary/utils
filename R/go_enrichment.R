@@ -10,6 +10,7 @@
 #' @param go_annotations R package with ensembl:GO annotations (defaults to mouse)
 #' @param return_fold_enrichment whether or not to return enrichment data for each GO hit. Defaults to FALSE for backwards compatibility.
 #' @param expression_cutoff the miminum counts detected for a given gene to be considered expressed
+#' @param ontology the GO ontology to query. Defaults to "BP".
 #' @return a dataframe containing the significantly enriched GO terms and enrichment scores if requested
 #' @export
 
@@ -17,7 +18,8 @@ go_enrichment = function(deseq_object,
                          goi,
                          go_annotations = "org.Mm.eg.db",
                          return_fold_enrichment = FALSE,
-                         expression_cutoff = 1)
+                         expression_cutoff = 1,
+                         ontology = "BP")
 {
   library(topGO) 
   library(tidyverse)
@@ -31,7 +33,7 @@ go_enrichment = function(deseq_object,
   selection = as.numeric(universe %in% goi)
   names(selection) = universe
   go_data = new("topGOdata", 
-                ontology = "BP", 
+                ontology = ontology, 
                 allGenes = selection,
                 geneSel = function(x){
                   return(x == 1)},
