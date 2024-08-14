@@ -26,6 +26,7 @@
 #' @param y_min minimum value of y for resultant plots
 #' @param y_max maximum value of y for resultant plots
 #' @param label_only_sig if true, label only significant genes from 'genes' argument (passed to pretty_MA_plot)
+#' @param highlight_genes gene labels to highlight with larger text (passed to pretty_MA_plot)
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE. (passed to pretty_MA_plot)
 #' @return a list of lists. "MA" is a list of ggplot2-editable MA plots. "hits" is a list of results objects.
 #' @export
@@ -38,7 +39,8 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
                               name_col = "row.names", lfc_threshold = 0, genes = NULL,
                               custom_annotation = NULL, max_overlaps = 10, label_alpha = 1,
                               random_seed = 12345, pdf_width = 6, pdf_height = 4,
-                              y_min = NA, y_max = NA, label_only_sig = FALSE, label_oor = FALSE)
+                              y_min = NA, y_max = NA, label_only_sig = FALSE, label_oor = FALSE,
+                              highlight_genes = c())
 {
   library(DESeq2)
   library(parallel)
@@ -106,7 +108,7 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
                           custom_annotation = custom_annotation, max_overlaps = max_overlaps, 
                           label_alpha = label_alpha, random_seed = random_seed,
                           y_min = y_min, y_max = y_max, label_only_sig = label_only_sig,
-                          label_oor = label_oor)
+                          label_oor = label_oor, highlight_genes = highlight_genes)
     return(plot) })
   names(ma_plots) = names(res)
   
