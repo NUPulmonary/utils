@@ -28,6 +28,7 @@
 #' @param label_only_sig if true, label only significant genes from 'genes' argument (passed to pretty_MA_plot)
 #' @param highlight_genes gene labels to highlight with larger text (passed to pretty_MA_plot)
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE. (passed to pretty_MA_plot)
+#' @param alpha value of alpha for differential expression analysis. Defaults to 0.05
 #' @return a list of lists. "MA" is a list of ggplot2-editable MA plots. "hits" is a list of results objects.
 #' @export
 
@@ -40,7 +41,7 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
                               custom_annotation = NULL, max_overlaps = 10, label_alpha = 1,
                               random_seed = 12345, pdf_width = 6, pdf_height = 4,
                               y_min = NA, y_max = NA, label_only_sig = FALSE, label_oor = FALSE,
-                              highlight_genes = c())
+                              highlight_genes = c(), alpha = 0.05)
 {
   library(DESeq2)
   library(parallel)
@@ -94,7 +95,7 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
   
   #perform comparisons
   res = lapply(all_comparisons, function(comp){
-    hits = results(dge, contrast = comp, alpha = 0.05, parallel = T)
+    hits = results(dge, contrast = comp, alpha = alpha, parallel = T)
     return(hits) })
   names(res) = vapply(all_comparisons, function(comp){
     name = paste(comp[1], comp[2], "over", comp[3], sep = "_")

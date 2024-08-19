@@ -17,6 +17,7 @@
 #' @param y_max maximum value of y for resultant plot
 #' @param label_only_sig if true, label only significant genes from 'genes' argument
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE.
+#' @param alpha value of alpha for differential expression analysis. Defaults to 0.05
 #' @return an MA plot generated in ggplot2
 #' @export
 
@@ -36,7 +37,8 @@ pretty_MA_plot = function(results,
                           y_max = NA,
                           label_only_sig = FALSE,
                           label_oor = FALSE,
-                          random_seed = 12345)
+                          random_seed = 12345,
+                          alpha = 0.05)
 {
   require(ggrepel)
   require(biomaRt)
@@ -53,9 +55,9 @@ pretty_MA_plot = function(results,
   }
   #add colors for significant
   results = results %>% 
-    mutate(color = factor(case_when(padj >= 0.05 ~ "NS",
-                                    padj < 0.05 & log2FoldChange > 0 ~ "upregulated",
-                                    padj < 0.05 & log2FoldChange < 0 ~ "downregulated")),
+    mutate(color = factor(case_when(padj >= alpha ~ "NS",
+                                    padj < alpha & log2FoldChange > 0 ~ "upregulated",
+                                    padj < alpha & log2FoldChange < 0 ~ "downregulated")),
            #effectively ignored if label_oor == FALSE, but label for later shape change
            oor = factor(case_when(log2FoldChange > y_max ~ "OOR High",
                                   log2FoldChange < y_min ~ "OOR Low",
@@ -89,14 +91,14 @@ pretty_MA_plot = function(results,
   {
     #plot as separate up and down to prevent crossing of the origin
     plt = plt + 
-      geom_label_repel(data = subset(results, padj < 0.05 & 
+      geom_label_repel(data = subset(results, padj < alpha & 
                                                  abs(log2FoldChange) >= lfc_threshold &
                                                  log2FoldChange > 0),
                        aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
                        max.overlaps = max_overlaps,
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(1, NA)) +
-      geom_label_repel(data = subset(results, padj < 0.05 & 
+      geom_label_repel(data = subset(results, padj < alpha & 
                                        abs(log2FoldChange) >= lfc_threshold &
                                        log2FoldChange <= 0),
                        aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
@@ -110,7 +112,7 @@ pretty_MA_plot = function(results,
     if(label_only_sig == TRUE)
     {
       hits = results %>% 
-        dplyr::filter(padj < 0.05) %>% 
+        dplyr::filter(padj < alpha) %>% 
         .$external_gene_name
       genes = intersect(genes, hits)
     }
