@@ -16,7 +16,6 @@ output_directory = config["output"]["directory"]
 sample = config["sample"]
 cluster_field = config["cb_config"]["cluster_field"]
 radius = config["cb_config"]["radius"]
-
 rule all:
     input:
         f"{output_directory}.tar.gz"
@@ -26,8 +25,7 @@ rule import_scanpy:
         h5ad=config["input"]["h5ad_file"],
         meta=config["input"]["metadata_file"],
         markers=config["input"]["markers"],
-    output:
-        "{output_directory}/{sample}.tar.gz"
+    output: "{output_directory}/{sample}"
     resources:
         slurm__account=config["slurm"]["account"],
         slurm__partiton=config["slurm"]["partition"],
@@ -36,7 +34,7 @@ rule import_scanpy:
         slurm__mem=config["slurm"]["mem"]
     shell:
         """
-        cbImportScanpy -i ${input.h5ad} -o ${output}
+        cbImportScanpy -i {input.h5ad} -o {output}
         """
 
 rule update_cb_conf:

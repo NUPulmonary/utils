@@ -1,16 +1,16 @@
 input:
-    h5ad_file: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/myeloid/myeloid.h5ad"
-    metadata_file: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/myeloid/myeloid-metadata.csv"
-    markers: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/myeloid/myeloid-markers.csv"
+    h5ad_file: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/test_data/mouse_spleen_atlas.h5ad"
+    metadata_file: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/test_data/mouse_spleen_atlas-metadata.csv"
+    markers: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/test_data/mouse_spleen_atlas-markers.csv"
 output:
-    directory: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/snkmk_test"
+    directory: "/projects/b1038/Pulmonary/lcusick/projects/seurat_to_cellbrowser/snkmk_test/"
 cb_config:
     cluster_field: "leiden"
     radius: 2
-sample: "myeloid"
+sample: "snkmk_test"
 slurm:
-    account: "b1042"
-    partition: "genomics-himem"
+    account: "b1038"
+    partition: "b1038"
     hours: 4
     cores: 8
     mem: 100
