@@ -1,0 +1,66 @@
+__author__ = "Nikolay Markov"
+__email__ = "nikolay.markov@northwestern.edu"
+__license__ = "MIT"
+
+
+import os
+
+import pandas as pd
+import snakemake
+from snakemake.shell import shell
+
+
+configfile: "config.yaml"
+
+output_directory = config["output"]["directory"]
+sample = config["sample"]
+cluster_field = config["cb_config"]["cluster_field"]
+radius = config["cb_config"]["radius"]
+
+rule all:
+    input:
+        f"{output_directory}.tar.gz"
+
+rule import_scanpy:
+    input:
+        h5ad=config["input"]["h5ad_file"],
+        meta=config["input"]["metadata_file"],
+        markers=config["input"]["markers"],
+    output:
+        "{output_directory}/{sample}.tar.gz"
+    resources:
+        slurm__account=config["slurm"]["account"],
+        slurm__partiton=config["slurm"]["partition"],
+        slurm__hours=config["slurm"]["hours"],
+        slurm__cores=config["slurm"]["cores"],
+        slurm__mem=config["slurm"]["mem"]
+    shell:
+        """
+        cbImportScanpy -i ${input.h5ad} -o ${output}
+        """
+
+rule update_cb_conf:
+    input:
+        markers=config["input"]["markers"]
+    output:
+        "{output_directory}/cellbrowser.conf"
+    shell:
+        """
+        markers_file=`basename {input.markers}`
+        sed -i "s/louvain/{clustering_algorithm}/g" ${output}
+        sed -i "s/#radius=2/radius={radius}/" ${output}
+        sed -i "s/meta.tsv/$meta_file/" ${output}
+
+        echo -e "\ndisplay_single_meta=True" >> "$out_dir/cellbrowser.conf"
+        echo -e "\nmarkers = [{{\\"file\\": \\"$markers_file\\", \\"shortLabel\\":\\"Cluster Markers\\"}}]\n" \
+            >> "$out_dir/cellbrowser.conf"
+        """
+
+rule tar:
+    output:
+        "output_directory/{sample}.tar.gz"
+    shell:
+        """
+        tar -czf {output} output_directory
+        rm -rf output_directory
+        """
