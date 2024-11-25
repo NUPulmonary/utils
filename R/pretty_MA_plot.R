@@ -4,7 +4,7 @@
 #' @param convert_ids whether or not to convert from ensembl gene IDs to gene symbol
 #' @param id_col the name of the column in your df with ensembl ids. By default, just uses rownames
 #' @param mart_name the name of the biomart library to use. Defaults to mouse, ensembl 
-#' @param name_col the name of the column with gene symbols to be used for plotting. Ignored if convert_ids = T. Defaults to NULL and row names are used.
+#' @param name_col the name of the column with gene symbols to be used for plotting. Ignored if convert_ids = T
 #' @param lfc_threshold the minimum absolute log2 fold-change for labeling. Defaults to 0 (all significant genes)
 #' @param genes genes to subset to
 #' @param highlight_genes gene labels to highlight with larger text
@@ -25,7 +25,7 @@ pretty_MA_plot = function(results,
                           convert_ids = TRUE, 
                           id_col = "row.names",
                           mart_name = "mmusculus_gene_ensembl",
-                          name_col = NULL,
+                          name_col = "row.names",
                           lfc_threshold = 0,
                           genes = NULL,
                           highlight_genes = c(),
@@ -44,19 +44,14 @@ pretty_MA_plot = function(results,
   require(biomaRt)
   require(tidyverse)
   
-  results = as.data.frame(results)
   if(convert_ids) #from ensembl to common symbols
   {
     results = id_convert(results = results, 
-               id_col = id_col,
-               mart_name = mart_name,
-               name_col = name_col,
-               custom_annotation = custom_annotation)
-    name_col = 'external_gene_name'
-  }
-  else if(is.null(name_col)){
-    results = results %>% mutate(external_gene_name = row.names(results)) # Assign row names to a column so they can be used for ggplot labels
-    name_col = 'external_gene_name'
+                         id_col = id_col,
+                         mart_name = mart_name,
+                         name_col = name_col,
+                         custom_annotation = custom_annotation)
+    name_col = "external_gene_name"
   }
   #add colors for significant
   results = results %>% 
@@ -72,7 +67,7 @@ pretty_MA_plot = function(results,
   if(label_oor == TRUE)
   {
     results = results %>% 
-      mutate(log2FoldChange = case_when(oor == "OOR High" ~ y_max,
+      dplyr::mutate(log2FoldChange = case_when(oor == "OOR High" ~ y_max,
                                                oor == "OOR Low" ~ y_min,
                                                oor == "In Range" ~ log2FoldChange))
   }
@@ -97,16 +92,16 @@ pretty_MA_plot = function(results,
     #plot as separate up and down to prevent crossing of the origin
     plt = plt + 
       geom_label_repel(data = subset(results, padj < alpha & 
-                                                 abs(log2FoldChange) >= lfc_threshold &
-                                                 log2FoldChange > 0),
-                       aes(label = .data[[name_col]], size = factor(name_col %in% highlight_genes)), 
+                                       abs(log2FoldChange) >= lfc_threshold &
+                                       log2FoldChange > 0),
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
                        max.overlaps = max_overlaps,
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(1, NA)) +
       geom_label_repel(data = subset(results, padj < alpha & 
                                        abs(log2FoldChange) >= lfc_threshold &
                                        log2FoldChange <= 0),
-                       aes(label = .data[[name_col]], size = factor(name_col %in% highlight_genes)), 
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(NA, -1)) +
@@ -118,26 +113,26 @@ pretty_MA_plot = function(results,
     {
       hits = results %>% 
         dplyr::filter(padj < alpha) %>% 
-        .$name_col
+        .$external_gene_name
       genes = intersect(genes, hits)
     }
     plt = plt + 
-      geom_label_repel(data = subset(results, name_col %in% genes & log2FoldChange > 0),
-                       aes(label = .data[[name_col]], size = factor(name_col %in% highlight_genes)),
+      geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange > 0),
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(1, NA)) +
-      geom_label_repel(data = subset(results, name_col %in% genes & log2FoldChange <= 0),
-                       aes(label = .data[[name_col]], size = factor(name_col %in% highlight_genes)),
+      geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange <= 0),
+                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(NA, -1)) +
       scale_size_manual(values = c("TRUE" = label_text_size * 1.5,
-                                     "FALSE" = label_text_size))
+                                   "FALSE" = label_text_size))
   }
-                                 
+  
   #edit ylim as necessary
   if(!is.na(y_min) || !is.na(y_max))
   {
@@ -155,6 +150,10 @@ id_convert = function(results,
                       custom_annotation = NULL)
 {
   require(biomaRt)
+  if(!is.data.frame(results)) #convert to standard data frame, as necessary
+  {
+    results = as.data.frame(results)
+  }
   
   if(!is.null(custom_annotation))
   {
