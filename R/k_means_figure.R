@@ -190,6 +190,7 @@ k_means_figure = function(dge,
   library(topGO)
   library(GO.db)
   library(DESeq2)
+  library(parallel)
   set.seed(random_seed)
   
   counts_mat = construct_goi_matrix(dge = dge,
