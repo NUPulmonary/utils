@@ -41,9 +41,10 @@ def main():
     for index, val in enumerate(features):
         feature_to_index[str(val)] = index
 
-    # Find distinct set of cells. Discard the first entry which is 0 (non-cell)
-    cells = np.unique(transcripts_df["cell"])[1:]
-
+    # Replace missing cell IDs with 0. Find distinct set of cells. Discard the first entry which is 0 (non-cell)
+    na_row = transcripts_df["cell"].isna()
+    transcripts_df.loc[na_row, "cell"] = 0
+    cells = pd.unique(transcripts_df["cell"])[1:]
 
     # Create a cells x features data frame, initialized with 0
     matrix = pd.DataFrame(0, index=range(len(features)), columns=cells, dtype=np.int32)
