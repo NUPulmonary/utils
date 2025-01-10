@@ -1,4 +1,4 @@
-This is the collection of useful scripts, snippets and recipies
+This is the collection of useful scripts, snippets and recipes
 for the division, to make code reuse easier and projects more reproducible.
 
 If you want to contribute anything, please open a pull request.
