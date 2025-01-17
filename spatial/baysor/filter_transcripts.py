@@ -27,7 +27,7 @@ def main():
     filtered_frame.loc[neg_cell_row,"cell_id"] = 0
 
     # Output filtered transcripts to CSV
-    filtered_frame.to_csv('_'.join(["X"+str(args.min_x)+"-"+str(args.max_x), "Y"+str(args.min_y)+"-"+str(args.max_y), "filtered_transcripts.csv"]),
+    filtered_frame.to_csv("filtered_transcripts.csv",
                           index=False,
                           encoding = 'utf-8')
 
