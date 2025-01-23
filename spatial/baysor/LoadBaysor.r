@@ -1,11 +1,9 @@
-LoadBaysor = function(data.dir, 
-         cell_feature_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
+LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
          remove_bad_codewords = TRUE, #remove unassigned or deprecated
          fov = 'fov', 
          assay = 'Xenium') {
   data <- ReadBaysor(
-    data.dir = data.dir,
-    cell_feature_dir =  cell_feature_dir,
+    baysor_dir =  baysor_dir,
     type = c("centroids", "segmentations"),
   )
   
@@ -35,8 +33,7 @@ LoadBaysor = function(data.dir,
 }
 
 ReadBaysor = function(
-    data.dir,
-    cell_feature_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
+    baysor_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
     remove_bad_codewords = TRUE, #remove unassigned or deprecated
     outs = c("matrix", "microns"),
     type = "centroids",
@@ -67,7 +64,7 @@ ReadBaysor = function(
         pmtx(message = 'Reading counts matrix', class = 'sticky', amount = 0)
         #note!! Baysor currently does not split the matrix into categories, but may at some point. 
         #Fix next 8 lines accordingly.
-        matrix <- suppressWarnings(Read10X(data.dir = cell_feature_dir))
+        matrix <- suppressWarnings(Read10X(data.dir = paste0(baysor_dir, "/baysor_mtx")))
         if(remove_bad_codewords == TRUE)
         {
           good_codewords = rownames(matrix)[!(grepl("UnassignedCodeword|DeprecatedCodeword|BlankCodeword|Negative Control Codeword|Negative Control Probe", rownames(matrix)))]
@@ -85,14 +82,15 @@ ReadBaysor = function(
           amount = 0
         )
         if (has_dt) {
-          cell_info <- as.data.frame(data.table::fread(file.path(data.dir, "cells.csv.gz")))
+          cell_info <- as.data.frame(data.table::fread(paste0(baysor_dir, "/segmentation_cell_stats.csv")))
         } else {
-          cell_info <- read.csv(file.path(data.dir, "cells.csv.gz"))
+          cell_info <- read.csv(paste0(baysor_dir, "/segmentation_cell_stats.csv"))
         }
         cell_centroid_df <- data.frame(
-          x = cell_info$x_centroid,
-          y = cell_info$y_centroid,
-          cell = cell_info$cell_id,
+          #note that all 3 are different in segmentation_cell_stats.csv vs cells.csv.gz
+          x = cell_info$x,
+          y = cell_info$y,
+          cell = cell_info$cell,
           stringsAsFactors = FALSE
         )
         pcents(type = 'finish')
@@ -107,12 +105,7 @@ ReadBaysor = function(
         )
         
         # load cell boundaries
-        if (has_dt) {
-          cell_boundaries_df <- as.data.frame(data.table::fread(file.path(data.dir, "cell_boundaries.csv.gz")))
-        } else {
-          cell_boundaries_df <- read.csv(file.path(data.dir, "cell_boundaries.csv.gz"), stringsAsFactors = FALSE)
-        }
-        names(cell_boundaries_df) <- c("cell", "x", "y")
+        cell_boundaries_df = parse_Baysor_JSON(paste0(baysor_dir, "/segmentation_polygons_2d.json"))
         psegs(type = "finish")
         cell_boundaries_df
       },
@@ -126,18 +119,19 @@ ReadBaysor = function(
         
         # molecules
         if (has_dt) {
-          tx_dt <- as.data.frame(data.table::fread(file.path(data.dir, "transcripts.csv.gz")))
-          transcripts <- subset(tx_dt, qv >= mols.qv.threshold)
+          tx_dt <- as.data.frame(data.table::fread(paste0(baysor_dir, "/segmentation.csv")))
+          transcripts <- subset(tx_dt, qv >= mols.qv.threshold) #qv keeps same name
         } else {
-          transcripts <- read.csv(file.path(data.dir, "transcripts.csv.gz"))
+          transcripts <- read.csv(paste0(baysor_dir, "/segmentation.csv"))
           transcripts <- subset(transcripts, qv >= mols.qv.threshold)
         }
         
         df <-
           data.frame(
-            x = transcripts$x_location,
-            y = transcripts$y_location,
-            gene = transcripts$feature_name,
+            #note name changes from segmentation.csv vs transcripts.csv.gz
+            x = transcripts$x,
+            y = transcripts$y,
+            gene = transcripts$gene,
             stringsAsFactors = FALSE
           )
         pmicrons(type = 'finish')
@@ -148,3 +142,21 @@ ReadBaysor = function(
   }, USE.NAMES = TRUE)
   return(data)
 }
+
+parse_Baysor_JSON = function(filepath){
+  json = jsonlite::fromJSON(filepath, flatten = TRUE)
+  json = json$features
+  #extract lists of x, y coords
+  json$x = lapply(json$geometry.coordinates, function(row){
+    return(row[,,1]) })
+  json$y = lapply(json$geometry.coordinates, function(row){
+    return(row[,,2]) })
+  
+  #now pivot to single entries (long form)
+  json = tidyr::unnest_longer(json, col = c(x, y))
+  
+  #simplify output
+  out = data.frame(cell = json$id, x = json$x, y = json$y)
+  return(out)
+}
+  
