@@ -1,5 +1,6 @@
 LoadBaysor = function(data.dir, 
          cell_feature_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
+         remove_bad_codewords = TRUE, #remove unassigned or deprecated
          fov = 'fov', 
          assay = 'Xenium') {
   data <- ReadBaysor(
@@ -34,6 +35,7 @@ LoadBaysor = function(data.dir,
 ReadBaysor = function(
     data.dir,
     cell_feature_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
+    remove_bad_codewords = TRUE, #remove unassigned or deprecated
     outs = c("matrix", "microns"),
     type = "centroids",
     mols.qv.threshold = 20
@@ -61,8 +63,16 @@ ReadBaysor = function(
       'matrix' = {
         pmtx <- progressr::progressor()
         pmtx(message = 'Reading counts matrix', class = 'sticky', amount = 0)
+        #note!! Baysor currently does not split the matrix into categories, but may at some point. 
+        #Fix next 8 lines accordingly.
         matrix <- suppressWarnings(Read10X(data.dir = cell_feature_dir))
+        if(remove_bad_codewords == TRUE)
+        {
+          good_codewords = rownames(matrix)[!(grepl("UnassignedCodeword|DeprecatedCodeword", rownames(matrix)))]
+          matrix = matrix[good_codewords, ]
+        }
         pmtx(type = "finish")
+        matrix <- list("Gene Expression" = matrix) #here as well
         matrix
       },
       'centroids' = {
