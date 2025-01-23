@@ -68,7 +68,7 @@ ReadBaysor = function(
         matrix <- suppressWarnings(Read10X(data.dir = cell_feature_dir))
         if(remove_bad_codewords == TRUE)
         {
-          good_codewords = rownames(matrix)[!(grepl("UnassignedCodeword|DeprecatedCodeword", rownames(matrix)))]
+          good_codewords = rownames(matrix)[!(grepl("UnassignedCodeword|DeprecatedCodeword|BlankCodeword|Negative Control Codeword|Negative Control Probe", rownames(matrix)))]
           matrix = matrix[good_codewords, ]
         }
         pmtx(type = "finish")
