@@ -18,6 +18,15 @@ LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.di
     assay = assay
   )
   
+  #baysor has some very small discrepancies in cells between outputs (like 2 total cells)
+  #subset down to just intersection
+  common_cells = intersect(intersect(colnames(data$matrix[["Gene Expression"]]), 
+                                     data$centroids$cell),
+                           data$segmentations$cell)
+  data$matrix[["Gene Expression"]] = data$matrix[["Gene Expression"]][, common_cells]
+  data$centroids = subset(data$centroids, cell %in% common_cells)
+  data$segmentations = subset(data$segmentations, cell %in% common_cells)
+  
   xenium.obj <- CreateSeuratObject(counts = data$matrix[["Gene Expression"]], assay = assay)
   
   #all lost with Baysor AFAIK
@@ -90,7 +99,8 @@ ReadBaysor = function(
           #note that all 3 are different in segmentation_cell_stats.csv vs cells.csv.gz
           x = cell_info$x,
           y = cell_info$y,
-          cell = cell_info$cell,
+          #Baysor barcodes.tsv.gz does this for some reason. Need to do this to successfully link.
+          cell =  paste0("cell_", cell_info$cell),
           stringsAsFactors = FALSE
         )
         pcents(type = 'finish')
@@ -157,6 +167,7 @@ parse_Baysor_JSON = function(filepath){
   
   #simplify output
   out = data.frame(cell = json$id, x = json$x, y = json$y)
+  #Baysor barcodes.tsv.gz does this for some reason. Need to do this to successfully link.
+  out$cell = paste0("cell_", out$cell)
   return(out)
 }
-  
