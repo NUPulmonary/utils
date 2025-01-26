@@ -7,6 +7,17 @@ LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.di
     type = c("centroids", "segmentations"),
   )
   
+  #baysor has some very small discrepancies in cells between outputs (like 2 total cells)
+  #subset down to just intersection and get into same order
+  common_cells = intersect(intersect(colnames(data$matrix[["Gene Expression"]]), 
+                                     data$centroids$cell),
+                           data$segmentations$cell)
+  data$matrix[["Gene Expression"]] = data$matrix[["Gene Expression"]][, common_cells]
+  data$centroids = data$centroids[common_cells, ]
+  data$segmentations = subset(data$segmentations, cell %in% common_cells)
+  data$segmentations$cell = factor(data$segmentations$cell, levels = rownames(data$centroids))
+  data$segmentations = data$segmentations[order(data$segmentations$cell), , drop = FALSE]
+  
   segmentations.data <- list(
     "centroids" = CreateCentroids(data$centroids),
     "segmentation" = CreateSegmentation(data$segmentations)
@@ -17,15 +28,6 @@ LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.di
     molecules = data$microns,
     assay = assay
   )
-  
-  #baysor has some very small discrepancies in cells between outputs (like 2 total cells)
-  #subset down to just intersection
-  common_cells = intersect(intersect(colnames(data$matrix[["Gene Expression"]]), 
-                                     data$centroids$cell),
-                           data$segmentations$cell)
-  data$matrix[["Gene Expression"]] = data$matrix[["Gene Expression"]][, common_cells]
-  data$centroids = subset(data$centroids, cell %in% common_cells)
-  data$segmentations = subset(data$segmentations, cell %in% common_cells)
   
   xenium.obj <- CreateSeuratObject(counts = data$matrix[["Gene Expression"]], assay = assay)
   
@@ -103,6 +105,7 @@ ReadBaysor = function(
           cell =  paste0("cell_", cell_info$cell),
           stringsAsFactors = FALSE
         )
+        rownames(cell_centroid_df) = cell_centroid_df$cell
         pcents(type = 'finish')
         cell_centroid_df
       },
