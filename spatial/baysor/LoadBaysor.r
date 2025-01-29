@@ -1,7 +1,7 @@
 LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
          remove_bad_codewords = TRUE, #remove unassigned or deprecated
          fov = 'fov', 
-         assay = 'Xenium') {
+         assay = 'RNA') {
   data <- ReadBaysor(
     baysor_dir =  baysor_dir,
     type = c("centroids", "segmentations"),
