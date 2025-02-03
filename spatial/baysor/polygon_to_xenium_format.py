@@ -1,25 +1,23 @@
-"""
-Update Baysor 2d-polygon file so that it can be imported into Xenium Explorer
-"""
-
 import json
 
-with open('/projects/b1038/Pulmonary/lcusick/projects/baysor/mlung-test/output/XETG00190_2/segmentation_polygons_2d.json', 'r') as f:
-    data = json.load(f)
+def reformat_seg_polygons(data):
+"""
+Reformat 2d-polygon file to be imported into Xenium Explorer 
+@param data: segmentation_polygons_2d.json Baysor output file read into a dictionary
+@returns processed: data dictionary reformatted according to schema below
+"""
+    geometries = []
+    for row in data.get('features'):
+        geometries_dict = row.get('geometry')
+        cell_id = row.get('id')
+        cell_id = cell_id.split("-")[1]
+        geometries_dict.update({'cell': cell_id})
+        geometries.append(geometries_dict)
 
-geometries = []
-for row in data.get('features'):
-    geometries_dict = row.get('geometry')
-    cell_id = row.get('id')
-    cell_id = cell_id.split("-")[1]
-    geometries_dict.update({'cell': cell_id})
-    geometries.append(geometries_dict)
+    processed = {'geometries': geometries}
+    processed.update({'type': 'GeometryCollection'})
+    return processed                  
 
-processed = {'geometries': geometries}
-processed.update({'type': 'GeometryCollection'})
-                      
-with open('/projects/b1038/Pulmonary/lcusick/projects/baysor/mlung-test/output/XETG00190_2/segmentation_polygons_2d_processed.json', 'w') as f:
-    json.dump(processed, f)
 
 """
 This is the format we need the data in for importing into xenium:
