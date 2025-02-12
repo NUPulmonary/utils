@@ -4,13 +4,16 @@ __license__ = "MIT"
 
 
 import os
+import re
 import pandas as pd
 
 input = snakemake.input
 output = snakemake.output
 
 result = []
-for sample in input:
+sc_input = [sample for sample in input if re.search(r'SC', sample)]
+
+for sample in sc_input:
     m = pd.read_csv(f"{sample}/outs/metrics_summary.csv")
     m.insert(0, "Sample", os.path.basename(sample))
     m.insert(2,'Fraction Reads in Cells',m.pop('Fraction Reads in Cells'))
