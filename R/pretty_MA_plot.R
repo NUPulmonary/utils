@@ -72,6 +72,9 @@ pretty_MA_plot = function(results,
                                                oor == "In Range" ~ log2FoldChange))
   }
   
+  #split highlight genes into up-, downregulated
+  highlight_genes_up = 
+  
   plt = ggplot(results, 
                aes(x = baseMean, y = log2FoldChange)) +
     geom_point(aes(color = color, shape = oor)) +
@@ -91,22 +94,40 @@ pretty_MA_plot = function(results,
   {
     #plot as separate up and down to prevent crossing of the origin
     plt = plt + 
+      #upregulated
       geom_label_repel(data = subset(results, padj < alpha & 
                                        abs(log2FoldChange) >= lfc_threshold &
                                        log2FoldChange > 0),
-                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
+                       aes(label = .data[[name_col]]), 
+                       size = label_text_size,
                        max.overlaps = max_overlaps,
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(1, NA)) +
+      #downregulated
       geom_label_repel(data = subset(results, padj < alpha & 
                                        abs(log2FoldChange) >= lfc_threshold &
                                        log2FoldChange <= 0),
-                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)), 
+                       aes(label = .data[[name_col]]), 
+                       size = label_text_size,
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(NA, -1)) +
-      scale_size_manual(values = c("TRUE" = label_text_size * 1.5,
-                                   "FALSE" = label_text_size))
+      #highlight genes (priority): up
+      geom_label_repel(data = subset(results, external_gene_name %in% highlight_genes & log2FoldChange > 0),
+                       aes(label = .data[[name_col]]),
+                       size = label_text_size * 1.5,
+                       min.segment.length = 0.1, 
+                       max.overlaps = 1e3, #arbitrarily high
+                       fill = alpha(c("white"), label_alpha),
+                       ylim = c(1, NA)) +
+    #highlight genes (priority): down
+    geom_label_repel(data = subset(results, external_gene_name %in% highlight_genes & log2FoldChange < 0),
+                     aes(label = .data[[name_col]]),
+                     size = label_text_size * 1.5,
+                     min.segment.length = 0.1, 
+                     max.overlaps = 1e3, #arbitrarily high
+                     fill = alpha(c("white"), label_alpha),
+                     ylim = c(NA, -1)) 
   } else
   {
     if(label_only_sig == TRUE)
@@ -115,22 +136,40 @@ pretty_MA_plot = function(results,
         dplyr::filter(padj < alpha) %>% 
         .$external_gene_name
       genes = intersect(genes, hits)
+      highlight_genes = intersect(highlight_genes, hits)
     }
     plt = plt + 
+      #upregulated
       geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange > 0),
-                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
+                       aes(label = .data[[name_col]]),
+                       size = label_text_size,
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(1, NA)) +
+      #downregulated
       geom_label_repel(data = subset(results, external_gene_name %in% genes & log2FoldChange <= 0),
-                       aes(label = .data[[name_col]], size = factor(external_gene_name %in% highlight_genes)),
+                       aes(label = .data[[name_col]]),
+                       size = label_text_size,
                        min.segment.length = 0.1, 
                        max.overlaps = max_overlaps, 
                        fill = alpha(c("white"), label_alpha),
                        ylim = c(NA, -1)) +
-      scale_size_manual(values = c("TRUE" = label_text_size * 1.5,
-                                   "FALSE" = label_text_size))
+      #highlight genes (priority): up
+      geom_label_repel(data = subset(results, external_gene_name %in% highlight_genes & log2FoldChange > 0),
+                       aes(label = .data[[name_col]]),
+                       size = label_text_size * 1.5,
+                       min.segment.length = 0.1, 
+                       max.overlaps = 1e3, #arbitrarily high
+                       fill = alpha(c("white"), label_alpha),
+                       ylim = c(1, NA)) +
+      geom_label_repel(data = subset(results, external_gene_name %in% highlight_genes & log2FoldChange < 0),
+                       aes(label = .data[[name_col]]),
+                       size = label_text_size * 1.5,
+                       min.segment.length = 0.1, 
+                       max.overlaps = 1e3, #arbitrarily high
+                       fill = alpha(c("white"), label_alpha),
+                       ylim = c(NA, -1)) 
   }
   
   #edit ylim as necessary
