@@ -20,6 +20,7 @@
 #' @param custom_annotation for pretty_ma_plot
 #' @param max_overlaps for pretty_ma_plot
 #' @param label_alpha for pretty_ma_plot
+#' @param label_text_size for pretty_ma_plot
 #' @param random_seed for pretty_ma_plot
 #' @param pdf_width width of pdf in inches
 #' @param pdf_height height of pdf in inches
@@ -39,7 +40,7 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
                               id_col = "row.names", mart_name = "mmusculus_gene_ensembl",
                               name_col = "row.names", lfc_threshold = 0, genes = NULL,
                               custom_annotation = NULL, max_overlaps = 10, label_alpha = 1,
-                              random_seed = 12345, pdf_width = 6, pdf_height = 4,
+                              random_seed = 12345, pdf_width = 6, pdf_height = 4, label_text_size = (10 / .pt),
                               y_min = NA, y_max = NA, label_only_sig = FALSE, label_oor = FALSE,
                               highlight_genes = c(), alpha = 0.05)
 {
@@ -107,7 +108,7 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
                           id_col = id_col, mart_name = mart_name,
                           name_col = name_col, lfc_threshold = lfc_threshold, genes = genes,
                           custom_annotation = custom_annotation, max_overlaps = max_overlaps, 
-                          label_alpha = label_alpha, random_seed = random_seed,
+                          label_alpha = label_alpha, random_seed = random_seed, label_text_size = label_text_size,
                           y_min = y_min, y_max = y_max, label_only_sig = label_only_sig,
                           label_oor = label_oor, highlight_genes = highlight_genes)
     return(plot) })
