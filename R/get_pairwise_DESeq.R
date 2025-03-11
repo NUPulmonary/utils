@@ -53,8 +53,6 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
   library(biomaRt)
   register(MulticoreParam(cores))
   
-  source("~/utils/R/pretty_MA_plot.R")
-  
   #evaluate sort direction
   sort_direction = match.arg(sort_direction)
   
