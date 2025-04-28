@@ -18,7 +18,8 @@
 #' @param label_only_sig if true, label only significant genes from 'genes' argument
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE.
 #' @param alpha value of alpha for differential expression analysis. Defaults to 0.05
-#' @return an MA plot generated in ggplot2
+#' @import DESeq2 ggplot2 ggrepel biomaRt
+#' @return an MA plot generated in ggplot2 dplyr magrittr tibble
 #' @export
 
 pretty_MA_plot = function(results, 
@@ -40,9 +41,35 @@ pretty_MA_plot = function(results,
                           random_seed = 12345,
                           alpha = 0.05)
 {
-  require(ggrepel)
-  require(biomaRt)
-  require(tidyverse)
+  
+  if(!("DESeq2" %in% .packages()))
+  {
+    library(DESeq2)
+  }
+  if(!("dplyr" %in% .packages()))
+  {
+    library(dplyr)
+  }
+  if(!("magrittr" %in% .packages()))
+  {
+    library(maggritr)
+  }
+  if(!("tibble" %in% .packages()))
+  {
+    library(tibble)
+  }
+  if(!("ggplot2" %in% .packages()))
+  {
+    library(ggplot2)
+  }
+  if(!("ggrepel" %in% .packages()))
+  {
+    library(ggrepel)
+  }
+  if(!("biomaRt" %in% .packages()))
+  {
+    library(biomaRt)
+  }
   
   if(convert_ids) #from ensembl to common symbols
   {

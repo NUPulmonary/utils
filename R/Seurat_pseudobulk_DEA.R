@@ -1,31 +1,68 @@
-# Function to separate single-cell data by a factor of interest and create 
-# pseudo-bulk datasets by combining matrices for each factor
-# followed by DEA with DESeq2   
-
-# currently supports only single-factor designs
+#' Function to separate single-cell data by a factor of interest and create  pseudo-bulk datasets by combining matrices for each factor followed by DEA with DESeq2   
+#' Note: currently supports only single-factor designs
+#' 
+#' @param object seurat object
+#' @param metaData metadata mapping samples to factors. Rownames are sample names.
+#' @param design design string for DESeq
+#' @param splitCells whether or not to split by cell type (or whatever)
+#' @param skip if splitting cells, which factors should be skipped? Defaults to none.
+#' @param cellFactor name of the cell-type column
+#' @param organism organism in ensembl format, e.g. mmusculus
+#' @param geneVar type of gene ID used, in biomart format e.g. ensembl_gene_id
+#' @param outDir directory to output results
+#' @param outPrefix file prefix for results files
+#' @param sortDirection direction to sort comparisons: alphabetical "ascending" or reverse "descending"
+#' @param minCells = 50, #whether or not to override the minimum number of cells/samples
+#' @param cores cores to run in parallel
+#' @param fit_type to control dispersion fitting
+#' @param genomePrefix regular expression of genome prefixe(s) on gene names for removal and better binding downstream
+#' @param cellMappings optional data frame to redefine samples from individual cell IDs rather than just prefix. Rownames are cell IDs.
+#' @import Seurat DESeq2 biomaRt future BiocParallel tibble
+#' @return Nothing. All relevant CSVs, PDFs of plots, and RDS files are saved to the directory specified.
+#' @export
   
-bulkDEA = function(object, #seurat object
-                   metaData, #metadata mapping samples to factors. Rownames are sample names.
-                   design, #design string for DESeq
-                   splitCells = T, #whether or not to split by cell type (or whatever)
-                   skip = NA, #if splitting cells, which factors should be skipped? Defaults to none.
-                   cellFactor = NULL, #name of the cell-type column
-                   organism, #in ensembl format, e.g. mmusculus
-                   geneVar, #type of gene ID used, in biomart format e.g. ensembl_gene_id
-                   outDir, #directory to output results
-                   outPrefix, #file prefix for results files
-                   sortDirection = c("descending", "ascending"), #direction to sort comparisons: alphabetical "ascending" or reverse "descending"
-                   minCells = 50, #whether or not to override the minimum number of cells/samples
-                   cores = 1, #cores to run in parallel
-                   fit_type = "parametric", #to control dispersion fitting
-                   genomePrefix = NA, # regular expression of genome prefixe(s) on gene names for removal and better binding downstream
-                   cellMappings = NULL) #optional data frame to redefine samples from individual cell IDs rather than just prefix. Rownames are cell IDs.
+bulkDEA = function(object, 
+                   metaData, 
+                   design, 
+                   splitCells = T, 
+                   skip = NA,
+                   cellFactor = NULL, 
+                   organism, 
+                   geneVar,
+                   outDir, 
+                   outPrefix, 
+                   sortDirection = c("descending", "ascending"), 
+                   minCells = 50, 
+                   cores = 1,
+                   fit_type = "parametric",
+                   genomePrefix = NA, 
+                   cellMappings = NULL) 
 {
-   require(Seurat)
-   require(DESeq2)
-   require(biomaRt)
-   require(future)
-   library(BiocParallel)
+  
+  if(!("Seurat" %in% .packages()))
+  {
+    library(Seurat)
+  }
+  if(!("DESeq2" %in% .packages()))
+  {
+    library(DESeq2)
+  }
+  if(!("biomaRt" %in% .packages()))
+  {
+    library(biomaRt)
+  }
+  if(!("future" %in% .packages()))
+  {
+    library(future)
+  }
+  if(!("BiocParallel" %in% .packages()))
+  {
+    library(BiocParallel)
+  }
+  if(!("tibble" %in% .packages()))
+  {
+    library(tibble)
+  }
    register(BPPARAM = MulticoreParam(cores))
    dateString = format(Sys.Date(), "%y%m%d")
    if(!dir.exists(outDir))

@@ -11,11 +11,17 @@
 rotate_fov = function(fov,
                       angle_degrees,
                       padding = 100) {
-  
-  #useful for skipping samples when running concatenate_fovs()
-  if(angle_degrees == 0)
+  if(!("Seurat" %in% .packages()))
   {
-    return(fov)
+    library(Seurat)
+  }
+  if(!("dplyr" %in% .packages()))
+  {
+    library(dplyr)
+  }
+  if(!("spdep" %in% .packages()))
+  {
+    library(spdep)
   }
   
   if(class(fov) != "FOV")
@@ -24,7 +30,6 @@ rotate_fov = function(fov,
   }
   
   #rotate centroids
-  library(spdep)
   angle_radians = angle_degrees * pi / 180 #convert angle to radians
   new_coords = Rotation(fov$centroids@coords, angle = angle_radians)
   colnames(new_coords) = c("x", "y")

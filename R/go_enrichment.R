@@ -11,6 +11,7 @@
 #' @param return_fold_enrichment whether or not to return enrichment data for each GO hit. Defaults to FALSE for backwards compatibility.
 #' @param expression_cutoff the miminum counts detected for a given gene to be considered expressed
 #' @param ontology the GO ontology to query. Defaults to "BP".
+#' @import topGO dplyr magrittr tibble
 #' @return a dataframe containing the significantly enriched GO terms and enrichment scores if requested
 #' @export
 
@@ -21,8 +22,22 @@ go_enrichment = function(deseq_object,
                          expression_cutoff = 1,
                          ontology = "BP")
 {
-  library(topGO) 
-  library(tidyverse)
+  if(!("topGO" %in% .packages()))
+  {
+    library(topGO) 
+  }
+  if(!("dplyr" %in% .packages()))
+  {
+    library(dplyr)
+  }
+  if(!("magrittr" %in% .packages()))
+  {
+    library(maggritr)
+  }
+  if(!("tibble" %in% .packages()))
+  {
+    library(tibble)
+  }
   
   #define universe as all detected genes in dataset
   all_counts = counts(deseq_object, normalized = T)

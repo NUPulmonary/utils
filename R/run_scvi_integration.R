@@ -10,10 +10,10 @@
 #' @param hvgs number of highly variable genes to use in the model. Default: 3000.
 #' @param n_layers Number of hidden layers used for encoder and decoder NNs
 #' @param dropout_rate Dropout rate for neural networks
-#' 
+#' @import Seurat sceasy reticulate renv
 #' @return a Seurat object with new embeddings in the "SCVI" slot
 #' @export
-#' 
+
 run_SCVI_integration = function(object, 
                                 python_path = NA,
                                 project_path = NA,
@@ -36,15 +36,27 @@ run_SCVI_integration = function(object,
     {
       install.packages("renv")
     }
-    require(renv)
+    if(!("library" %in% .packages()))
+    {
+      library(renv)
+    }
     renv::load(project_path)
   }
   
-  require(Seurat)
-  require(sceasy)
-  
+  if(!("Seurat" %in% .packages()))
+  {
+    library(Seurat)
+  }
+  if(!("sceasy" %in% .packages()))
+  {
+    library(sceasy)
+  }
+  if(!("reticulate" %in% .packages()))
+  {
+    library(reticulate)
+  }
+    
   #set up reticulate
-  require(reticulate)
   if(!is.na(python_path))
   {
     use_python(python_path, required = T)

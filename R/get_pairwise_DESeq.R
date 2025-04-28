@@ -31,6 +31,7 @@
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE. (passed to pretty_MA_plot)
 #' @param alpha value of alpha for differential expression analysis. Defaults to 0.05
 #' @return a list of lists. "MA" is a list of ggplot2-editable MA plots. "hits" is a list of results objects.
+#' @import DESeq2 BiocParallel dplyr maggritr biomaRt tibble
 #' @export
 
 get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fit_type = "parametric", 
@@ -44,13 +45,32 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
                               y_min = NA, y_max = NA, label_only_sig = FALSE, label_oor = FALSE,
                               highlight_genes = c(), alpha = 0.05)
 {
-  library(DESeq2)
-  library(parallel)
-  library(doParallel)
-  library(BiocParallel)
-  library(Cairo)
-  library(tidyverse)
-  library(biomaRt)
+  
+  if(!("DESeq2" %in% .packages()))
+  {
+    library(DESeq2)
+  }
+  if(!("BiocParallel" %in% .packages()))
+  {
+    library(BiocParallel)
+  }
+  if(!("dplyr" %in% .packages()))
+  {
+    library(dplyr)
+  }
+  if(!("magrittr" %in% .packages()))
+  {
+    library(maggritr)
+  }
+  if(!("biomaRt" %in% .packages()))
+  {
+    library(biomaRt)
+  }
+  if(!("tibble" %in% .packages()))
+  {
+    library(tibble)
+  }
+  
   register(MulticoreParam(cores))
   
   #evaluate sort direction
@@ -150,10 +170,9 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
       for(i in 1:length(ma_plots))
       {
         outpath = paste0(output_directory, "/", names(ma_plots)[i], ".pdf")
-        CairoPDF(outpath,
+        pdf(outpath,
                  width = pdf_width,
-                 height = pdf_height,
-                 family = "Arial")
+                 height = pdf_height)
         plot(ma_plots[[i]])
         dev.off()
       }

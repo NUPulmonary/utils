@@ -1,10 +1,13 @@
-# copy of DESeq2 plotPCA, but returns the actual PCA object
-# add-ins
-# now returns percent variance for each PC requested
-# merge_metadata: joins output dataframe with colData. Defaults to FALSE for compatibility reasons.
-# return_loadings: return gene loadings data frame. Defaults to FALSE for compatibility reasons.
-# mart_name: prefix for biomart dataset name. Defaults to "mmusculus". Ignored if custom annotation is supplied or return_loadings is FALSE.
-# custom_annotation: a dataframe with "ensembl_gene_id" and "external_gene_name" as columns. Take precedence over mart name if supplied.
+#' A copy of DESeq2 plotPCA, but returns the actual PCA object
+#'
+#' @param merge_metadata joins output dataframe with colData. Defaults to FALSE for compatibility reasons.
+#' @param return_loadings return gene loadings data frame. Defaults to FALSE for compatibility reasons.
+#' @param mart_name prefix for biomart dataset name. Defaults to "mmusculus". Ignored if custom annotation is supplied or return_loadings is FALSE.
+#' @param custom_annotation a dataframe with "ensembl_gene_id" and "external_gene_name" as columns. Take precedence over mart name if supplied.
+#' @import DESeq2 dplyr tibble ggplot2
+#' @retun a list object with pca = PCA object, plot = ggplot2 plot of PC1-2, loadings = PCA loadings, percent_var = percent variance explained by each PC
+#' @export
+
 plotPCA_manual = function(object, 
                           intgroup="condition", #essentially ignored if merge_metadata = TRUE
                           ntop=500, 
