@@ -12,7 +12,7 @@
 #' @param outDir directory to output results
 #' @param outPrefix file prefix for results files
 #' @param sortDirection direction to sort comparisons: alphabetical "ascending" or reverse "descending"
-#' @param minCells = 50, #whether or not to override the minimum number of cells/samples
+#' @param minCells whether or not to override the minimum number of cells/samples
 #' @param cores cores to run in parallel
 #' @param fit_type to control dispersion fitting
 #' @param genomePrefix regular expression of genome prefixe(s) on gene names for removal and better binding downstream
