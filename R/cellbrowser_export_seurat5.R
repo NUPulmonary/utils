@@ -57,8 +57,8 @@ cellbrowser_export_seurat5 = function(obj,
                     "geneIdType = \"symbol\"",
                     "meta = \"meta.tsv\"",
                     "markers = \" markers.tsv\"",
-                    #avoid misuse of non-numeric columns with numeric values
-                    paste0("enumFields = [\"", paste(colnames(obj@meta.data)[unlist(lapply(obj@meta.data, is.numeric), use.names = FALSE)], collapse = "\", \""), "\"]"),
+                    #avoid misuse of factor cols that look numeric
+                    paste0("enumFields = [\"", paste(colnames(obj@meta.data)[unlist(lapply(obj@meta.data, is.factor), use.names = FALSE)], collapse = "\", \""), "\"]"),
                     paste0("clusterField = \"", cluster_col, "\""),
                     paste0("labelField = \"", cluster_col, "\"")),
               file = file("cellbrowser.conf"), 
