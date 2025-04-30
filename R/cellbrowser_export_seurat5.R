@@ -56,7 +56,7 @@ cellbrowser_export_seurat5 = function(obj,
                     "exprMatrix = \"exprMatrix.tsv.gz\"",
                     "geneIdType = \"symbol\"",
                     "meta = \"meta.tsv\"",
-                    "markers = \" markers.tsv\"",
+                    "markers = [{\"file\":\"markers.tsv\", \"shortLabel\":\"Cluster Markers\"}]",
                     #avoid misuse of factor cols that look numeric
                     paste0("enumFields = [\"", paste(colnames(obj@meta.data)[unlist(lapply(obj@meta.data, is.factor), use.names = FALSE)], collapse = "\", \""), "\"]"),
                     paste0("clusterField = \"", cluster_col, "\""),
@@ -80,6 +80,7 @@ cellbrowser_export_seurat5 = function(obj,
   message("Writing expression data")
   out_mat = as.data.frame(obj@assays[[assay]]@layers$counts, row.names = rownames(obj))
   colnames(out_mat) = colnames(obj)
+  out_mat = rownames_to_column(out_mat, "gene")
   write_tsv(out_mat, "exprMatrix.tsv")
   gzip("exprMatrix.tsv")
   
@@ -98,7 +99,7 @@ cellbrowser_export_seurat5 = function(obj,
   {
     obj@misc$markers = FindAllMarkers(obj)
   }
-  write_tsv(obj@misc$markers[, c("cluster", "gene", "p_val_adj")], "markers.tsv")
+  write_tsv(obj@misc$markers[, c("cluster", "gene", "p_val_adj", "avg_log2FC", "pct.1", "pct.2")], "markers.tsv")
   
   # Spatial coordinates (as necessary)
   if(!(is.null(fov)))
@@ -114,12 +115,10 @@ cellbrowser_export_seurat5 = function(obj,
     write_lines(x = "coords=[
     {
             \"file\":\"umap_coords.tsv\", 
-            \"flipY\" : True, # R files need to be flipped on the Y-axis
             \"shortLabel\":\"UMAP\"
     },
     {
             \"file\":\"spatial_coords.tsv\", 
-            \"flipY\" : True, # R files need to be flipped on the Y-axis
             \"shortLabel\":\"Spatial\", 
     },
     ]",
