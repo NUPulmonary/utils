@@ -32,7 +32,7 @@ go_enrichment = function(deseq_object,
   }
   if(!("magrittr" %in% .packages()))
   {
-    library(maggritr)
+    library(magrittr)
   }
   if(!("tibble" %in% .packages()))
   {

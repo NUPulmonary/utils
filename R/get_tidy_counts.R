@@ -28,7 +28,7 @@ get_tidy_counts = function(obj,
   }
   if(!("magrittr" %in% .packages()))
   {
-    library(maggritr)
+    library(magrittr)
   }
   if(!("tibble" %in% .packages()))
   {

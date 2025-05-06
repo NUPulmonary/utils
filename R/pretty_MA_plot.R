@@ -52,7 +52,7 @@ pretty_MA_plot = function(results,
   }
   if(!("magrittr" %in% .packages()))
   {
-    library(maggritr)
+    library(magrittr)
   }
   if(!("tibble" %in% .packages()))
   {

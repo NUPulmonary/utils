@@ -107,7 +107,7 @@ k_elbow = function(dge,
   }
   if(!("magrittr" %in% .packages()))
   {
-    library(maggritr)
+    library(magrittr)
   }
   if(!("ggplot2" %in% .packages()))
   {
@@ -220,7 +220,7 @@ k_means_figure = function(dge,
   }
   if(!("magrittr" %in% .packages()))
   {
-    library(maggritr)
+    library(magrittr)
   }
   if(!("tibble" %in% .packages()))
   {

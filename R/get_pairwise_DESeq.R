@@ -31,7 +31,7 @@
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE. (passed to pretty_MA_plot)
 #' @param alpha value of alpha for differential expression analysis. Defaults to 0.05
 #' @return a list of lists. "MA" is a list of ggplot2-editable MA plots. "hits" is a list of results objects.
-#' @import DESeq2 BiocParallel dplyr maggritr biomaRt tibble
+#' @import DESeq2 BiocParallel dplyr magrittr biomaRt tibble
 #' @export
 
 get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fit_type = "parametric", 
@@ -60,7 +60,7 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
   }
   if(!("magrittr" %in% .packages()))
   {
-    library(maggritr)
+    library(magrittr)
   }
   if(!("biomaRt" %in% .packages()))
   {
