@@ -112,7 +112,7 @@ pretty_MA_plot = function(results,
     scale_shape_manual(values = c("In Range" = 19,
                                   "OOR High" = 2,
                                   "OOR Low" = 6)) +
-    theme_bw(base_family = "Arial") +
+    theme_bw() +
     theme(legend.position = "none") + 
     xlab("Mean Expression") +
     ylab("log2(Fold Change)")

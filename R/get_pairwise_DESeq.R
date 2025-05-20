@@ -170,9 +170,10 @@ get_pairwise_DESeq = function(des, change_design = TRUE, comparison_col = NA, fi
       for(i in 1:length(ma_plots))
       {
         outpath = paste0(output_directory, "/", names(ma_plots)[i], ".pdf")
-        pdf(outpath,
+        cairo_pdf(outpath,
                  width = pdf_width,
-                 height = pdf_height)
+                 height = pdf_height,
+                 family = "Arial")
         plot(ma_plots[[i]])
         dev.off()
       }
