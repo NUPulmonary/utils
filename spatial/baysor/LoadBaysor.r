@@ -1,4 +1,14 @@
-LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
+#' Load Baysor outputs into Seurat
+#' 
+#' @param baysor_dir for alternate Baysor output, normally data.dir/cell_feature_matrix/
+#' @param remove_bad_codewords whether or not to remove deprecated/unassigned codewords. Defaults to TRUE.
+#' @param fov name for the fov/image object
+#' @param assay name of the assay object (defaults to "RNA")
+#' @return a Seurat v5 object with full spatial information
+#' @import Seurat
+#' @export
+
+LoadBaysor = function(baysor_dir, 
          remove_bad_codewords = TRUE, #remove unassigned or deprecated
          fov = 'fov', 
          assay = 'RNA') {
@@ -6,6 +16,11 @@ LoadBaysor = function(baysor_dir, #for alternate Baysor output, normally data.di
     baysor_dir =  baysor_dir,
     type = c("centroids", "segmentations"),
   )
+  
+  if(!("Seurat" %in% .packages()))
+  {
+    library(Seurat)
+  }
   
   #baysor has some very small discrepancies in cells between outputs (like 2 total cells)
   #subset down to just intersection and get into same order
@@ -134,9 +149,19 @@ ReadBaysor = function(
         if (has_dt) {
           tx_dt <- as.data.frame(data.table::fread(paste0(baysor_dir, "/segmentation.csv")))
           transcripts <- subset(tx_dt, qv >= mols.qv.threshold) #qv keeps same name
+          if(remove_bad_codewords == TRUE)
+          {
+            good_codewords = unique(transcripts$gene)[!(grepl("UnassignedCodeword|DeprecatedCodeword|BlankCodeword|Negative Control Codeword|Negative Control Probe", unique(transcripts$gene)))]
+            transcripts = subset(transcripts, gene %in% good_codewords)
+          }
         } else {
           transcripts <- read.csv(paste0(baysor_dir, "/segmentation.csv"))
           transcripts <- subset(transcripts, qv >= mols.qv.threshold)
+          if(remove_bad_codewords == TRUE)
+          {
+            good_codewords = unique(transcripts$gene)[!(grepl("UnassignedCodeword|DeprecatedCodeword|BlankCodeword|Negative Control Codeword|Negative Control Probe", unique(transcripts$gene)))]
+            transcripts = subset(transcripts, gene %in% good_codewords)
+          }
         }
         
         df <-
