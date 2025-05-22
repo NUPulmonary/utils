@@ -48,10 +48,9 @@ concatenate_fovs = function(obj,
       final_centroids@coords = rbind(final_centroids@coords, updated_centroids@coords)
       final_centroids@cells = c(final_centroids@cells, updated_centroids@cells)
       #expand out limits 
-      final_centroids@bbox["x", "min"] = min(final_centroids@bbox["x", "min"], updated_centroids@bbox["x", "min"])
-      final_centroids@bbox["x", "max"] = max(final_centroids@bbox["x", "max"], updated_centroids@bbox["x", "max"])
-      final_centroids@bbox["y", "min"] = min(final_centroids@bbox["y", "min"], updated_centroids@bbox["y", "min"])
-      final_centroids@bbox["y", "max"] = max(final_centroids@bbox["y", "max"], updated_centroids@bbox["y", "max"])
+      #note that min is inherited from image 1
+      final_centroids@bbox["x", "max"] = max(final_centroids@coords[, "x"])
+      final_centroids@bbox["y", "max"] = max(final_centroids@coords[, "y"])
     }
     
     #update molecule locations
@@ -71,12 +70,9 @@ concatenate_fovs = function(obj,
       for(molecule in names(final_molecules)){
         final_molecules[[molecule]]@coords = rbind(final_molecules[[molecule]]@coords, updated_molecules[[molecule]]@coords)
         #update boundaries
-        final_molecules[[molecule]]@bbox["x", "min"] = min(final_molecules[[molecule]]@bbox["x", "min"], 
-                                                           updated_molecules[[molecule]]@bbox["x", "min"])
+        #note that min is inherited from image 1
         final_molecules[[molecule]]@bbox["x", "max"] = max(final_molecules[[molecule]]@bbox["x", "max"], 
                                                            updated_molecules[[molecule]]@bbox["x", "max"])
-        final_molecules[[molecule]]@bbox["y", "min"] = min(final_molecules[[molecule]]@bbox["y", "min"], 
-                                                           updated_molecules[[molecule]]@bbox["y", "min"])
         final_molecules[[molecule]]@bbox["y", "max"] = max(final_molecules[[molecule]]@bbox["y", "max"], 
                                                            updated_molecules[[molecule]]@bbox["y", "max"])
       }
@@ -93,7 +89,8 @@ concatenate_fovs = function(obj,
       starting_y = final_centroids@bbox["y", "max"] + offset 
     } else
     {
-      starting_x = final_centroids@bbox["x", "max"] + offset
+      #here we want local, not global max
+      starting_x = max(updated_centroids@coords[, "x"]) + offset
     }
   }
     
@@ -104,10 +101,7 @@ concatenate_fovs = function(obj,
   
   if(append == FALSE)
   {
-    for(image in 1:length(obj@images))
-    {
-      obj@images[[image]] = NULL
-    }
+    obj@images[1:length(obj@images)] = NULL
   }
   obj@images[[fov_name]] = combined_fov
   
