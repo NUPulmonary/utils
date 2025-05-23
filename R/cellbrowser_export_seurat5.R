@@ -65,7 +65,7 @@ cellbrowser_export_seurat5 = function(obj,
               append = FALSE)
   
   #load RDS, as necessary
-  if(class(object) == "character")
+  if(class(obj) == "character")
   {
     obj = readRDS(obj)
   }
