@@ -99,7 +99,7 @@ cellbrowser_export_seurat5 = function(obj,
   {
     obj@misc$markers = FindAllMarkers(obj)
   }
-  write_tsv(obj@misc$markers[, c("cluster", "gene", "p_val_adj", "avg_log2FC", "pct.1", "pct.2")], "markers.tsv")
+  write_tsv(obj@misc$markers[, c("cluster", "gene", "avg_log2FC", "p_val_adj", "pct.1", "pct.2")], "markers.tsv")
   
   # Spatial coordinates (as necessary)
   if(!(is.null(fov)))
