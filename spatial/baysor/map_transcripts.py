@@ -44,7 +44,11 @@ def main():
     # Replace missing cell IDs with 0. Find distinct set of cells. Discard the first entry which is 0 (non-cell)
     na_row = transcripts_df["cell"].isna()
     transcripts_df.loc[na_row, "cell"] = 0
-    cells = pd.unique(transcripts_df["cell"])[1:]
+    # Credit to Nik for finding this: The first entry is not guaranteed to be 0 you morons
+    #cells = pd.unique(transcripts_df["cell"])[1:]
+    cells = list(pd.unique(transcripts_df["cell"]))
+    if 0 in cells:
+        cells.remove(0)
 
     # Create a cells x features data frame, initialized with 0
     matrix = pd.DataFrame(0, index=range(len(features)), columns=cells, dtype=np.int32)
