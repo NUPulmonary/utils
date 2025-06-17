@@ -2,7 +2,7 @@
 #' Note: currently discards cell boundary info
 #' 
 #' @param fov a Seurat5 "FOV" object
-#' @param angle_degrees rotation angle in degrees
+#' @param angle_degrees rotation angle in degrees (counter-clockwise)
 #' @param padding space to add between object boundary and zero point in x and y
 #' @return the same FOV object, rotated
 #' @import Seurat spdep dplyr
