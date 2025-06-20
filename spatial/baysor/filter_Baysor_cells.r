@@ -32,8 +32,14 @@ segmentation_cells = segmentation_cells[segmentation_cells != ""]
 
 #identify cells missing from segmentation and report
 ghost_cells = segmentation_cells[!(segmentation_cells %in% json$geometries$cell)]
-ghost_cells = paste0(segmentation_prefix, ghost_cells)
-message(paste(length(ghost_cells), "cell(s) missing from segmentation.csv:", ghost_cells))
+if(length(ghost_cells) > 0) #otherwise makes one just = prefic
+{
+  ghost_cells = paste0(segmentation_prefix, ghost_cells)
+  message(paste(length(ghost_cells), "cell(s) missing from segmentation.csv:", ghost_cells))
+} else
+{
+  message("All cells present!")
+}
 
 #filter segment and re-export
 if(length(ghost_cells) > 0)
