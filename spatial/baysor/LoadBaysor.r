@@ -4,22 +4,33 @@
 #' @param remove_bad_codewords whether or not to remove deprecated/unassigned codewords. Defaults to TRUE.
 #' @param fov name for the fov/image object
 #' @param assay name of the assay object (defaults to "RNA")
+#' @param baysor_output_type type of baysor output: legacy for 10X or default (default)
 #' @return a Seurat v5 object with full spatial information
 #' @import Seurat
 #' @export
 
-LoadBaysor = function(baysor_dir, 
-         remove_bad_codewords = TRUE, #remove unassigned or deprecated
-         fov = 'fov', 
-         assay = 'RNA') {
+LoadBaysor = function(baysor_dir,
+                      remove_bad_codewords = TRUE, #remove unassigned or deprecated
+                      fov = 'fov',
+                      assay = 'RNA',
+                      baysor_output_type = "default") {
   data <- ReadBaysor(
     baysor_dir =  baysor_dir,
     type = c("centroids", "segmentations"),
+    baysor_output_type = baysor_output_type
   )
   
   if(!("Seurat" %in% .packages()))
   {
     library(Seurat)
+  }
+  if(!("tidyr" %in% .packages()))
+  {
+    library(tidyr)
+  }
+  if(!("readr" %in% .packages()))
+  {
+    library(readr)
   }
   
   #baysor has some very small discrepancies in cells between outputs (like 2 total cells)
@@ -63,7 +74,8 @@ ReadBaysor = function(
     remove_bad_codewords = TRUE, #remove unassigned or deprecated
     outs = c("matrix", "microns"),
     type = "centroids",
-    mols.qv.threshold = 20
+    mols.qv.threshold = 20,
+    baysor_output_type = "default"
 ) {
   # Argument checking
   type <- match.arg(
@@ -110,7 +122,7 @@ ReadBaysor = function(
         if (has_dt) {
           cell_info <- as.data.frame(data.table::fread(paste0(baysor_dir, "/segmentation_cell_stats.csv")))
         } else {
-          cell_info <- read.csv(paste0(baysor_dir, "/segmentation_cell_stats.csv"))
+          cell_info <- read_csv(paste0(baysor_dir, "/segmentation_cell_stats.csv"))
         }
         cell_centroid_df <- data.frame(
           #note that all 3 are different in segmentation_cell_stats.csv vs cells.csv.gz
@@ -133,7 +145,16 @@ ReadBaysor = function(
         )
         
         # load cell boundaries
-        cell_boundaries_df = parse_Baysor_JSON(paste0(baysor_dir, "/segmentation_polygons_2d.json"))
+        if(baysor_output_type == "default")
+        {
+          cell_boundaries_df = parse_Baysor_JSON(paste0(baysor_dir, "/segmentation_polygons_2d.json"))
+        } else if(baysor_output_type == "legacy")
+        {
+          first_entry = as.data.frame(data.table::fread(paste0(baysor_dir, "/segmentation_cell_stats.csv")))[1,1]
+          prefix = substring(first_entry, 1, last = regexpr("-", first_entry))
+          cell_boundaries_df = parse_Baysor_JSON_legacy(paste0(baysor_dir, "/segmentation_polygons_2d.json"),
+                                                        prefix = prefix)
+        }
         psegs(type = "finish")
         cell_boundaries_df
       },
@@ -155,7 +176,7 @@ ReadBaysor = function(
             transcripts = subset(transcripts, gene %in% good_codewords)
           }
         } else {
-          transcripts <- read.csv(paste0(baysor_dir, "/segmentation.csv"))
+          transcripts <- read_csv(paste0(baysor_dir, "/segmentation.csv"))
           transcripts <- subset(transcripts, qv >= mols.qv.threshold)
           if(remove_bad_codewords == TRUE)
           {
@@ -197,5 +218,24 @@ parse_Baysor_JSON = function(filepath){
   out = data.frame(cell = json$id, x = json$x, y = json$y)
   #Baysor barcodes.tsv.gz does this for some reason. Need to do this to successfully link.
   out$cell = paste0("cell_", out$cell)
+  return(out)
+}
+
+parse_Baysor_JSON_legacy = function(filepath, prefix){
+  json = jsonlite::fromJSON(filepath, flatten = TRUE)
+  json = json$geometries
+  #extract lists of x, y coords
+  json$x = lapply(json$coordinates, function(row){
+    return(row[,,1]) })
+  json$y = lapply(json$coordinates, function(row){
+    return(row[,,2]) })
+  
+  #now pivot to single entries (long form)
+  json = tidyr::unnest_longer(json, col = c(x, y))
+  
+  #simplify output
+  out = data.frame(cell = json$cell, x = json$x, y = json$y)
+  #in this case cells are an integer value. Need to rescue prefix for compatibility.
+  out$cell = paste0("cell_", prefix, out$cell)
   return(out)
 }
