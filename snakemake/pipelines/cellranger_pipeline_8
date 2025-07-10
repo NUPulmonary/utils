@@ -1,0 +1,156 @@
+import pandas as pd
+import os
+import re
+
+MODE = config['mode']
+WRAPPER_DIR = "/home/rag0151/utils/snakemake/wrappers"
+#receive command-line inputs using the --config flag
+DATA_DIR = config['data_dir']
+SAMPLE_CSV_PATH = config['sample_csv_path'] 
+CELLRANGER_DIR = config['cellranger_dir']
+CREATE_BAM = config['create_bam']
+
+#optional flags
+if 'additional_flags_mkfastq' in config:
+   ADDITIONAL_FLAGS_MKFASTQ = config['additional_flags_mkfastq']
+   if ADDITIONAL_FLAGS_MKFASTQ == "" or ADDITIONAL_FLAGS_MKFASTQ is None:
+     ADDITIONAL_FLAGS_MKFASTQ = ""
+else:
+  ADDITIONAL_FLAGS_MKFASTQ = ""
+if 'additional_flags_cellranger' in config:
+   ADDITIONAL_FLAGS_CELLRANGER = config['additional_flags_cellranger']
+   if ADDITIONAL_FLAGS_CELLRANGER == "" or ADDITIONAL_FLAGS_CELLRANGER is None:
+      ADDITIONAL_FLAGS_CELLRANGER = ""
+else:
+  ADDITIONAL_FLAGS_CELLRANGER = ""
+if 'input_fastq_type' in config:
+   INPUT_FASTQ_TYPE = config['input_fastq_type']
+   if INPUT_FASTQ_TYPE == "" or INPUT_FASTQ_TYPE is None:
+     INPUT_FASTQ_TYPE = None
+else:
+  INPUT_FASTQ_TYPE = None
+
+if MODE != 'demult_only':
+  TRANSCRIPTOME = config['transcriptome']
+  INCLUDE_INTRONS = config['include_introns']
+ 
+if MODE != 'demult_only' and INPUT_FASTQ_TYPE != 'gex':
+  if 'antibodies' in config:
+    ANTIBODIES = config['antibodies']
+  else:
+    ANTIBODIES = None
+  if 'gex_fastqs' in config:
+    GEX_FASTQS = config['gex_fastqs'].split(' ')
+  else:
+    GEX_FASTQS = None
+elif MODE != 'demult_only' and INPUT_FASTQ_TYPE == 'gex':
+  if 'gex_fastqs' in config:
+    GEX_FASTQS = config['gex_fastqs'].split(' ')
+  else:
+    GEX_FASTQS = None
+  ANTIBODIES = None
+
+SAMPLES = pd.read_csv(SAMPLE_CSV_PATH)
+os.chdir(DATA_DIR)
+
+if MODE != 'demult_only':
+  rule all:
+      input:
+        f"{DATA_DIR}/cellranger/metrics_summary.csv"
+else:
+  rule all:
+      input:
+        [f"{DATA_DIR}/fastq-run/{run_id}" for run_id in SAMPLES.RunID.unique()]
+
+if MODE != 'manual_demult':
+  rule sample_sheet:
+      input: SAMPLE_CSV_PATH
+      output: f"{DATA_DIR}/{{run_id,\w+}}.csv"
+      params:
+          slurm__skip=True
+      wrapper:
+          f"file://{WRAPPER_DIR}/sample_sheet"
+
+if MODE != 'manual_demult':
+  rule demultiplex:
+      input:
+          "../../raw/{run_id}",
+          "{dir}/{run_id}.csv"
+      output: directory("{dir}/fastq-run/{run_id,\w+}")
+      params:
+          slurm__account="b1042",
+          slurm__partition="genomics",
+          slurm__cores=4,
+          slurm__hours=16,
+          slurm__mem=40,
+          cellranger_dir=CELLRANGER_DIR,
+          keep_cellranger_output=True,
+          additional_flags_mkfastq=ADDITIONAL_FLAGS_MKFASTQ
+      wrapper:
+          f"file://{WRAPPER_DIR}/mkfastq"
+
+if MODE == 'manual_demult':
+  rule cellranger:
+      input: 
+          #slightly different CSV structure here
+          lambda x: [f"{r}" for r in SAMPLES.fastqs[SAMPLES["sample"].str.contains(re.sub("SC|FBC", "", x.sample))].unique()]
+      output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
+      params:
+          slurm__account="b1042",
+          slurm__partition="genomics",
+          slurm__cores=8,
+          slurm__hours=32,
+          slurm__mem=80,
+          chemistry="auto",
+          input_fastq_type=INPUT_FASTQ_TYPE + "_manual_demult", #handles other comhinations in future
+          antibodies=ANTIBODIES,
+          transcriptome=TRANSCRIPTOME,
+          cellranger_dir=CELLRANGER_DIR,
+          sample_csv_path = SAMPLE_CSV_PATH,
+          include_introns = INCLUDE_INTRONS,
+          additional_flags_cellranger=ADDITIONAL_FLAGS_CELLRANGER
+      wrapper:
+          f"file://{WRAPPER_DIR}/cellranger"
+  
+elif MODE != 'demult_only':
+  rule cellranger:
+      input: 
+          lambda x: [f"{DATA_DIR}/fastq-run/{r}" for r in SAMPLES.RunID[SAMPLES.Sample == x.sample].values]
+      output: directory(f"{DATA_DIR}/cellranger/{{sample,\w+}}")
+      params:
+          slurm__account="b1042",
+          slurm__partition="genomics",
+          slurm__cores=8,
+          slurm__hours=32,
+          slurm__mem=80,
+          chemistry="auto",
+          input_fastq_type=INPUT_FASTQ_TYPE,
+          antibodies=ANTIBODIES,
+          transcriptome=TRANSCRIPTOME,
+          cellranger_dir=CELLRANGER_DIR,
+          sample_csv_path = SAMPLE_CSV_PATH,
+          gex_fastqs = GEX_FASTQS,
+          include_introns = INCLUDE_INTRONS,
+          create_bam = CREATE_BAM,
+          additional_flags_cellranger=ADDITIONAL_FLAGS_CELLRANGER
+      wrapper:
+          f"file://{WRAPPER_DIR}/cellranger"
+
+if MODE == 'manual_demult':
+  rule metrics_summary:
+      #treat SC and FBC as same sample
+      input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES["sample"][SAMPLES["sample"].str.contains("SC")].unique())
+      output: "{dir}/cellranger/metrics_summary.csv"
+      params:
+          slurm__skip=True
+      wrapper:
+          f"file://{WRAPPER_DIR}/metrics_summary"
+
+elif MODE != 'demult_only':
+  rule metrics_summary:
+      input: expand("{{dir}}/cellranger/{sample}", sample=SAMPLES.Sample.unique())
+      output: "{dir}/cellranger/metrics_summary.csv"
+      params:
+          slurm__skip=True
+      wrapper:
+          f"file://{WRAPPER_DIR}/metrics_summary"

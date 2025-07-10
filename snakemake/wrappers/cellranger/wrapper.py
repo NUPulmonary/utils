@@ -21,6 +21,7 @@ skip_sample = snakemake.params.get("skip_sample", False)
 sample_csv_path = snakemake.params.get("sample_csv_path", None)
 expected_cells = snakemake.params.get("n_cells", None)
 include_introns = snakemake.params.get("include_introns", None)
+create_bam = snakemake.params.get("create_bam", None)
 additional_args = snakemake.params.get("additional_flags_cellranger", "")
 
 input_fastq_type = snakemake.params.get("input_fastq_type", "gex")
@@ -62,6 +63,7 @@ else:
 assert transcriptome is not None, "param transcriptome is required"
 assert chemistry is not None, "param chemistry is required"
 assert sample is not None, "sample wildcard is required"
+assert create_bam is not None, "--create-bam parameter required"
 
 load_cellranger = ""
 if cellranger_dir == "":
@@ -143,6 +145,11 @@ if include_introns is not None:
     include_introns_arg = "--include-introns false"
     if include_introns:
         include_introns_arg = "--include-introns true"
+        
+if create_bam:
+    create_bam_arg = "--include-introns true"
+else:
+    create_bam_arg = "--include-introns false"
 
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
@@ -163,8 +170,9 @@ shell(
         --transcriptome={transcriptome} \
         --chemistry={chemistry} \
         {include_introns_arg} \
+        {create_bam_arg} \
         {sample_arg} \
-        {input_arg} \
+        {create_bamarg} \
         {feature_ref} \
         {expected_cells_arg} \
         {additional_args} \
