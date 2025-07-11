@@ -1,6 +1,7 @@
 #' Load Baysor outputs into Seurat
 #' 
 #' @param baysor_dir for alternate Baysor output, normally data.dir/cell_feature_matrix/
+#' @param matrix_dir location of 10X-formatted matrix files. Defaults to paste0(baysor_dir, "/baysor_mtx")
 #' @param remove_bad_codewords whether or not to remove deprecated/unassigned codewords. Defaults to TRUE.
 #' @param fov name for the fov/image object
 #' @param assay name of the assay object (defaults to "RNA")
@@ -10,12 +11,14 @@
 #' @export
 
 LoadBaysor = function(baysor_dir,
+                      matrix_dir = paste0(baysor_dir, "/baysor_mtx"),
                       remove_bad_codewords = TRUE, #remove unassigned or deprecated
                       fov = 'fov',
                       assay = 'RNA',
                       baysor_output_type = "default") {
   data <- ReadBaysor(
     baysor_dir =  baysor_dir,
+    matrix_dir = matrix_dir,
     type = c("centroids", "segmentations"),
     baysor_output_type = baysor_output_type
   )
@@ -71,6 +74,7 @@ LoadBaysor = function(baysor_dir,
 
 ReadBaysor = function(
     baysor_dir, #for alternate Baysor output, normally data.dir/cell_feature_matrix/
+    matrix_dir,
     remove_bad_codewords = TRUE, #remove unassigned or deprecated
     outs = c("matrix", "microns"),
     type = "centroids",
@@ -102,11 +106,18 @@ ReadBaysor = function(
         pmtx(message = 'Reading counts matrix', class = 'sticky', amount = 0)
         #note!! Baysor currently does not split the matrix into categories, but may at some point. 
         #Fix next 8 lines accordingly.
-        matrix <- suppressWarnings(Read10X(data.dir = paste0(baysor_dir, "/baysor_mtx")))
+        matrix <- suppressWarnings(Read10X(data.dir = matrix_dir))
         if(remove_bad_codewords == TRUE)
         {
-          good_codewords = rownames(matrix)[!(grepl("UnassignedCodeword|DeprecatedCodeword|BlankCodeword|Negative Control Codeword|Negative Control Probe", rownames(matrix)))]
-          matrix = matrix[good_codewords, ]
+          if(class(matrix) == "list") #real 10X matrices handle this correctly
+          {
+            matrix = matrix[["Gene Expression"]]
+            good_codewords = rownames(matrix)
+          } else #baysor alone
+          {
+            good_codewords = rownames(matrix)[!(grepl("UnassignedCodeword|DeprecatedCodeword|BlankCodeword|Negative Control Codeword|Negative Control Probe", rownames(matrix)))]
+            matrix = matrix[good_codewords, ]
+          }
         }
         pmtx(type = "finish")
         matrix <- list("Gene Expression" = matrix) #here as well
