@@ -147,9 +147,9 @@ if include_introns is not None:
         include_introns_arg = "--include-introns true"
         
 if create_bam:
-    create_bam_arg = "--include-introns true"
+    create_bam_arg = "--create-bam=true"
 else:
-    create_bam_arg = "--include-introns false"
+    create_bam_arg = "--create-bam=false"
 
 # Creating log
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
@@ -172,7 +172,6 @@ shell(
         {include_introns_arg} \
         {create_bam_arg} \
         {sample_arg} \
-        {create_bamarg} \
         {feature_ref} \
         {expected_cells_arg} \
         {additional_args} \
