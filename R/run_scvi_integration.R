@@ -36,7 +36,7 @@ run_SCVI_integration = function(object,
     {
       install.packages("renv")
     }
-    if(!("library" %in% .packages()))
+    if(!("renv" %in% .packages()))
     {
       library(renv)
     }
