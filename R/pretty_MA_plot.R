@@ -220,7 +220,7 @@ pretty_MA_plot = function(results,
                geom = "text", 
                label = paste(n_up, "Genes upregulated"), 
                color = "firebrick4", 
-               size = label_text_size, 
+               size = degs_label_size, 
                hjust = 1.1, 
                vjust = 2) +
       annotate(x = Inf, 
@@ -228,7 +228,7 @@ pretty_MA_plot = function(results,
                geom = "text", 
                label = paste(n_down, "Genes downregulated"), 
                color = "dodgerblue4", 
-               size = label_text_size, 
+               size = degs_label_size, 
                hjust = 1.1, 
                vjust = -1)
   }
