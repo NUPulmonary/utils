@@ -18,6 +18,8 @@
 #' @param label_only_sig if true, label only significant genes from 'genes' argument
 #' @param label_oor if true, adds triangles representing genes out of the plot limits. Defaults to FALSE.
 #' @param alpha value of alpha for differential expression analysis. Defaults to 0.05
+#' @param label_n_degs if true, label number of DEGs at plot extremes (upregulated and downregulated)
+#' @param degs_label_size label size for DEG numbers (defaults to label_text_size * 1.5). Ignored if label_n_degs is FALSE.
 #' @import DESeq2 ggplot2 ggrepel biomaRt
 #' @return an MA plot generated in ggplot2 dplyr magrittr tibble
 #' @export
@@ -39,7 +41,9 @@ pretty_MA_plot = function(results,
                           label_only_sig = FALSE,
                           label_oor = FALSE,
                           random_seed = 12345,
-                          alpha = 0.05)
+                          alpha = 0.05,
+                          label_n_degs = FALSE,
+                          degs_label_size = label_text_size * 1.5)
 {
   
   if(!("DESeq2" %in% .packages()))
@@ -100,7 +104,6 @@ pretty_MA_plot = function(results,
   }
   
   #split highlight genes into up-, downregulated
-  highlight_genes_up = 
   
   plt = ggplot(results, 
                aes(x = baseMean, y = log2FoldChange)) +
@@ -204,6 +207,30 @@ pretty_MA_plot = function(results,
   {
     plt = plt +
       ylim(y_min, y_max)
+  }
+  
+  #add number of DEGs if requested
+  if(label_n_degs == TRUE)
+  {
+    n_up = sum(na.omit(results$padj < alpha & results$log2FoldChange > 0))
+    n_down = sum(na.omit(results$padj < alpha & results$log2FoldChange < 0))
+    plt = plt +
+      annotate(x = Inf, 
+               y = Inf, 
+               geom = "text", 
+               label = paste(n_up, "Genes upregulated"), 
+               color = "firebrick4", 
+               size = label_text_size, 
+               hjust = 1.1, 
+               vjust = 2) +
+      annotate(x = Inf, 
+               y = -Inf, 
+               geom = "text", 
+               label = paste(n_down, "Genes downregulated"), 
+               color = "dodgerblue4", 
+               size = label_text_size, 
+               hjust = 1.1, 
+               vjust = -1)
   }
   
   return(plt)
