@@ -101,6 +101,16 @@ pretty_MA_plot = function(results,
       dplyr::mutate(log2FoldChange = case_when(oor == "OOR High" ~ y_max,
                                                oor == "OOR Low" ~ y_min,
                                                oor == "In Range" ~ log2FoldChange))
+  } else
+  {
+    if(name_col %in% colnames(results))
+    {
+      results$external_gene_name <- results[[name_col]]
+    }
+    else
+    {
+      warning("name_col parameter is not in colnames(results) and convert_ids is FALSE, Are you sure this is the correct annotations column?")
+    }
   }
   
   #split highlight genes into up-, downregulated
