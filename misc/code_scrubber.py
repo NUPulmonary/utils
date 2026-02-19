@@ -17,11 +17,12 @@ LOG_FILE = "redaction_log.tsv"
 
 # -------- Regex patterns --------
 PATTERNS = {
-    "FILE_PATH": re.compile(r"[\"\']*(/projects/[bp]\d{4,5}/|~/|/mnt/|/var/|/home/[a-zA-z]{3}\d{4})\S*[\"\']*"),
+    "FILE_PATH": re.compile(r"[\"\']*(/projects/[bp]\d{4,5}/|~/|/mnt/|/var/|/hpc/|/software/|/home/[a-zA-z]{3}\d{4})\S*[\"\']*"),
     "DATE_YYMMDD": re.compile(r"\b[0-9]{6}_"),
     #autopsy ID, MRNs, SSNs, phone numbers, general long numeric IDs
     "IDENTIFIER": re.compile(r"\b(A|NMA)\d{2}-?\d+.*\b|\d{3}-\d{3}-\d{4}|\d{3}-\d{2}-\d{4}|\d{7,128}"),
     "EMAIL_URL": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(?:com|org|edu|gov|net|mil|io|co)\b"),
+    "PROJECT_ALLOCATION": re.compile(r"[bp]\d{4,5}")
 }
 
 
