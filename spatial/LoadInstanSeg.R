@@ -21,10 +21,21 @@ LoadInstanSeg = function(json_path,
     dplyr::filter(valid == TRUE) %>% 
     dplyr::rename(cell = id)
   
+  ####### REMOVE AFTER TESTING!!!!!! ##########
+  raw = raw[1:1000, ]
+  gc()
+  
   #### Create feature matrix ####
   
   remove_measurement_type = function(col){
-    return(make.names(gsub(paste(":", measurement_type), "", col)))}
+    out = gsub("Cell: ", "", col)
+    out = gsub(paste(":", measurement_type), "", out)
+    return(make.names(out)) }
+  remove_measurement_type_cytonuc = function(col){
+    out = gsub("Cytoplasm: ", "Cytoplasm_", col)
+    out = gsub("Nucleus: ", "Nucleus_", out)
+    out = gsub(paste(":", measurement_type), "", out)
+    return(make.names(out)) }
   
   features = raw %>% 
     dplyr::select(cell, measurements) %>% 
@@ -34,13 +45,35 @@ LoadInstanSeg = function(json_path,
                   measurements = map(measurements, ~ map_if(.x, is.character, as.numeric))) %>% 
     #merge into single tibble
     unnest_wider(measurements, simplify = TRUE, strict = TRUE) %>% 
-    dplyr::rename(area = `Area µm^2`,
-                 circularity = Circularity,
-                 solidity = Solidity) %>% 
-    dplyr::select(cell, area, circularity, solidity, 
-                  #keep only mean or median measurements
-                  ends_with(measurement_type)) %>% 
+    dplyr::rename(nucleus_area = `Nucleus: Area µm^2`,
+                  cell_area = `Cell: Area µm^2`,
+                  nucleus_circularity = `Nucleus: Circularity`,
+                  cell_circularity = `Cell: Circularity`,
+                  nucleus_solidity = `Nucleus: Solidity`,
+                  cell_solidity = `Cell: Solidity`) %>% 
+    dplyr::select(cell, nucleus_area, cell_area, 
+                  nucleus_circularity, cell_circularity,
+                  nucleus_solidity, cell_solidity,
+                  #keep only mean or median measurements for whole cell
+                  matches(paste0("^Cell: .+: ", measurement_type))) %>% 
     dplyr::rename_with(.fn = remove_measurement_type) %>% 
+    column_to_rownames("cell") %>% 
+    t()
+  
+  #grab nuclear and cytoplasmic data as well for more complex analysis
+  #to add: pivot longer by nuc/cyto and then get ratio
+  cytonuclear = raw %>% 
+    dplyr::select(cell, measurements) %>% 
+    #This is a JSON of JSONs. Force processing.
+    dplyr::mutate(cell = make.names(cell),
+                  measurements = map(measurements, fromJSON),
+                  measurements = map(measurements, ~ map_if(.x, is.character, as.numeric))) %>% 
+    #merge into single tibble
+    unnest_wider(measurements, simplify = TRUE, strict = TRUE) %>% 
+    dplyr::select(cell,
+                  matches(paste0("^Cytoplasm: .+: ", measurement_type,
+                                 "|","^Nucleus: .+: ", measurement_type))) %>% 
+    dplyr::rename_with(.fn = remove_measurement_type_cytonuc) %>% 
     column_to_rownames("cell") %>% 
     t()
   
@@ -55,8 +88,8 @@ LoadInstanSeg = function(json_path,
   coords = st_coordinates(raw$geometry) %>% 
     as.data.frame() %>% 
     #L3 is cell number
-    dplyr::mutate(L3 = as.character(L3)) %>% 
-    left_join(., data.frame(L3 = rownames(raw), cell = raw$cell)) %>% 
+    dplyr::mutate(L2 = as.character(L2)) %>% 
+    left_join(., data.frame(L2 = rownames(raw), cell = raw$cell)) %>% 
     dplyr::select(x = X, y = Y, cell) %>% 
     dplyr::mutate(cell = make.names(cell)) %>% 
     dplyr::relocate(cell, x, y)
@@ -73,5 +106,6 @@ LoadInstanSeg = function(json_path,
   #### Construct Seurat Object ####
   obj = CreateSeuratObject(counts = features, assay = assay)
   obj[[fov]] = geoms
+  obj@misc$nuclear_cytoplasmic = cytonuclear
   return(obj)
 }
