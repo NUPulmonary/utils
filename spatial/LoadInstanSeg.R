@@ -21,10 +21,6 @@ LoadInstanSeg = function(json_path,
     dplyr::filter(valid == TRUE) %>% 
     dplyr::rename(cell = id)
   
-  ####### REMOVE AFTER TESTING!!!!!! ##########
-  raw = raw[1:1000, ]
-  gc()
-  
   #### Create feature matrix ####
   
   remove_measurement_type = function(col){
