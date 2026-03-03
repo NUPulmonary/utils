@@ -5,13 +5,15 @@
 #' @param assay name of the assay object (defaults to "CODEX")
 #' @param measurement_type mean or median expression values (default: Mean)
 #' @return a Seurat v5 object with full spatial information
-#' @import Seurat sf jsonlite dplyr tibble tidyr purrr magrittr s2
+#' @import Seurat sf jsonlite dplyr tibble tidyr purrr magrittr
 #' @export
 
 LoadInstanSeg = function(json_path,
                          fov = "fov",
                          assay = "CODEX",
                          measurement_type = c("Mean", "Median")){
+  
+  sf::sf_use_s2(FALSE) #by default assumes lat/long data
   
   measurement_type = match.arg(measurement_type)
   raw = st_read(json_path) %>% 
@@ -76,14 +78,14 @@ LoadInstanSeg = function(json_path,
   #### Import segmentation data ####
   
   #centroid calculation
-  centroids = st_centroid(raw$geometry) %>% 
+  centroids = st_centroid(raw) %>% 
     st_coordinates()
   rownames(centroids) = make.names(raw$cell)
   
   #restructure segmentation data as list of matrices
-  coords = st_coordinates(raw$geometry) %>% 
+  coords = st_coordinates(raw) %>% 
     as.data.frame() %>% 
-    #L3 is cell number
+    #L2 is cell number
     dplyr::mutate(L2 = as.character(L2)) %>% 
     left_join(., data.frame(L2 = rownames(raw), cell = raw$cell)) %>% 
     dplyr::select(x = X, y = Y, cell) %>% 
