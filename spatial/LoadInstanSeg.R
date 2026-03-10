@@ -4,6 +4,9 @@
 #' @param fov name for the fov/image object
 #' @param assay name of the assay object (defaults to "CODEX")
 #' @param measurement_type mean or median expression values (default: Mean)
+#' @param normalize_bitdepth scale fluorescence intensity to 0-1? Avoids issues with 8-bit and 16-bit images being used in the same dataset. (default: TRUE)
+#' @param perform_normalization create "data" slot with arcsinh normalization? Set to false to perform your own normalization later. (default: TRUE)
+#' @param normalization_cofactor cofactor for asinh normalization. (default: 1)
 #' @return a Seurat v5 object with full spatial information
 #' @import Seurat sf jsonlite dplyr tibble tidyr purrr magrittr
 #' @export
@@ -11,6 +14,9 @@
 LoadInstanSeg = function(json_path,
                          fov = "fov",
                          assay = "CODEX",
+                         normalize_bitdepth = TRUE,
+                         perform_normalization = TRUE,
+                         normalization_cofactor = 1,
                          measurement_type = c("Mean", "Median")){
   
   sf::sf_use_s2(FALSE) #by default assumes lat/long data
@@ -24,7 +30,6 @@ LoadInstanSeg = function(json_path,
     dplyr::rename(cell = id)
   
   #### Create feature matrix ####
-  
   remove_measurement_type = function(col){
     out = gsub("Cell: ", "", col)
     out = gsub(paste(":", measurement_type), "", out)
@@ -101,9 +106,52 @@ LoadInstanSeg = function(json_path,
     assay = assay
     )
   
+  #### scale to bit depth ####
+  if(normalize_bitdepth == TRUE)
+  {
+    #features
+    #normalize only fluorescence rows
+    fluorescence_rows = which(!grepl("_area|_circularity|_solidity", rownames(features)))
+    bitdepth = ifelse(max(features[fluorescence_rows, ], na.rm = TRUE) <= 255,
+                      yes = 255,
+                      no = 65535)
+    features[fluorescence_rows, ] = features[fluorescence_rows, ] / bitdepth
+    
+    #cytonuclear
+    #only fluorescence rows in this one
+    cytonuclear = cytonuclear / bitdepth
+  }
+  
   #### Construct Seurat Object ####
   obj = CreateSeuratObject(counts = features, assay = assay)
   obj[[fov]] = geoms
-  obj@misc$nuclear_cytoplasmic = cytonuclear
+  obj@misc$nuclear_cytoplasmic_raw = cytonuclear
+  
+  #### Perform Normalization ####
+  if(perform_normalization == TRUE)
+  {
+    features_norm = features
+    
+    #start with morphology measures (log)
+    size_rows = which(grepl("_area", rownames(features_norm)))
+    features_norm[size_rows, ] = log(features_norm[size_rows, ])
+    
+    #fluorescence features (asinh)
+    fluorescence_rows = which(!grepl("_area|_circularity|_solidity", rownames(features_norm)))
+    features_norm[fluorescence_rows, ] = asinh(features_norm[fluorescence_rows, ] / normalization_cofactor)
+    #format according to Seurat oddities
+    rownames(features_norm) = gsub("_", "-", rownames(features_norm))
+    
+    #circularity and solidity measures are already on a reasonable scale (0-1)
+    #and fairly normally distributed
+    
+    #cytonuclear
+    cytonuclear_norm = asinh(cytonuclear / normalization_cofactor)
+    
+    #update Seurat object
+    obj@assays[[assay]]$data = features_norm
+    obj@misc$nuclear_cytoplasmic_norm = cytonuclear_norm
+  }
+  
   return(obj)
 }
