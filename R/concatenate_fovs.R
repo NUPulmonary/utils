@@ -22,6 +22,8 @@ concatenate_fovs = function(obj,
     library(Seurat)
   }
   
+  contains_molecules = "molecules" %in% names(obj@images[[1]])
+  
   #get shape of final image
   n_fovs = length(obj@images)
   n_rows = ceiling(n_fovs / n_cols)
@@ -54,27 +56,30 @@ concatenate_fovs = function(obj,
     }
     
     #update molecule locations
-    if(image == 1)
+    if(contains_molecules)
     {
-      final_molecules = obj@images[[image]]$molecules
-    } else
-    {
-      updated_molecules = obj@images[[image]]$molecules
-      for(molecule in names(updated_molecules)){
-        updated_molecules[[molecule]]@coords[,"x"] = updated_molecules[[molecule]]@coords[,"x"] + starting_x
-        updated_molecules[[molecule]]@coords[,"y"] = updated_molecules[[molecule]]@coords[,"y"] + starting_y
-        updated_molecules[[molecule]]@bbox["x",] = updated_molecules[[molecule]]@bbox["x",] + starting_x
-        updated_molecules[[molecule]]@bbox["y",] = updated_molecules[[molecule]]@bbox["y",] + starting_y
-      }
-        
-      for(molecule in names(final_molecules)){
-        final_molecules[[molecule]]@coords = rbind(final_molecules[[molecule]]@coords, updated_molecules[[molecule]]@coords)
-        #update boundaries
-        #note that min is inherited from image 1
-        final_molecules[[molecule]]@bbox["x", "max"] = max(final_molecules[[molecule]]@bbox["x", "max"], 
-                                                           updated_molecules[[molecule]]@bbox["x", "max"])
-        final_molecules[[molecule]]@bbox["y", "max"] = max(final_molecules[[molecule]]@bbox["y", "max"], 
-                                                           updated_molecules[[molecule]]@bbox["y", "max"])
+      if(image == 1)
+      {
+        final_molecules = obj@images[[image]]$molecules
+      } else
+      {
+        updated_molecules = obj@images[[image]]$molecules
+        for(molecule in names(updated_molecules)){
+          updated_molecules[[molecule]]@coords[,"x"] = updated_molecules[[molecule]]@coords[,"x"] + starting_x
+          updated_molecules[[molecule]]@coords[,"y"] = updated_molecules[[molecule]]@coords[,"y"] + starting_y
+          updated_molecules[[molecule]]@bbox["x",] = updated_molecules[[molecule]]@bbox["x",] + starting_x
+          updated_molecules[[molecule]]@bbox["y",] = updated_molecules[[molecule]]@bbox["y",] + starting_y
+        }
+          
+        for(molecule in names(final_molecules)){
+          final_molecules[[molecule]]@coords = rbind(final_molecules[[molecule]]@coords, updated_molecules[[molecule]]@coords)
+          #update boundaries
+          #note that min is inherited from image 1
+          final_molecules[[molecule]]@bbox["x", "max"] = max(final_molecules[[molecule]]@bbox["x", "max"], 
+                                                             updated_molecules[[molecule]]@bbox["x", "max"])
+          final_molecules[[molecule]]@bbox["y", "max"] = max(final_molecules[[molecule]]@bbox["y", "max"], 
+                                                             updated_molecules[[molecule]]@bbox["y", "max"])
+        }
       }
     }
     
