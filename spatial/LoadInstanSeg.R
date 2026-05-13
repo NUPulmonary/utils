@@ -25,7 +25,8 @@ LoadInstanSeg = function(json_path,
   raw = st_read(json_path) %>% 
     dplyr::filter(!is.na(measurements)) %>% 
     #remove invalid segmentations
-    dplyr::mutate(valid = st_is_valid(geometry)) %>% 
+    dplyr::mutate(valid = st_is_valid(geometry),
+                  id = make.names(id)) %>% 
     dplyr::filter(valid == TRUE) %>% 
     dplyr::rename(cell = id)
   
@@ -43,8 +44,7 @@ LoadInstanSeg = function(json_path,
   features = raw %>% 
     dplyr::select(cell, measurements) %>% 
     #This is a JSON of JSONs. Force processing.
-    dplyr::mutate(cell = make.names(cell),
-                  measurements = map(measurements, fromJSON),
+    dplyr::mutate(measurements = map(measurements, fromJSON),
                   measurements = map(measurements, ~ map_if(.x, is.character, as.numeric))) %>% 
     #merge into single tibble
     unnest_wider(measurements, simplify = TRUE, strict = TRUE) %>% 
@@ -68,8 +68,7 @@ LoadInstanSeg = function(json_path,
   cytonuclear = raw %>% 
     dplyr::select(cell, measurements) %>% 
     #This is a JSON of JSONs. Force processing.
-    dplyr::mutate(cell = make.names(cell),
-                  measurements = map(measurements, fromJSON),
+    dplyr::mutate(measurements = map(measurements, fromJSON),
                   measurements = map(measurements, ~ map_if(.x, is.character, as.numeric))) %>% 
     #merge into single tibble
     unnest_wider(measurements, simplify = TRUE, strict = TRUE) %>% 
@@ -85,21 +84,41 @@ LoadInstanSeg = function(json_path,
   #centroid calculation
   centroids = st_centroid(raw) %>% 
     st_coordinates()
-  rownames(centroids) = make.names(raw$cell)
+  rownames(centroids) = raw$cell
+  centroids_df = data.frame(
+    cell = raw$cell,
+    x = centroids[,1],
+    y = centroids[,2]
+  )
   
-  #restructure segmentation data as list of matrices
-  coords = st_coordinates(raw) %>% 
-    as.data.frame() %>% 
-    #L2 is cell number
-    dplyr::mutate(L2 = as.character(L2)) %>% 
-    left_join(., data.frame(L2 = rownames(raw), cell = raw$cell)) %>% 
-    dplyr::select(x = X, y = Y, cell) %>% 
-    dplyr::mutate(cell = make.names(cell)) %>% 
-    dplyr::relocate(cell, x, y)
-
+  #segmentation coordinates
+  coords_list = lapply(seq_len(nrow(raw)), function(i) {
+    
+    cur_geom = raw$geometry[i]
+    cur_cell = raw$cell[i]
+    
+    # extract coordinates for this geometry only
+    cur_coords = st_coordinates(cur_geom) %>%
+      as.data.frame()
+    
+    # retain only x/y
+    cur_coords = cur_coords[, c("X", "Y")]
+    colnames(cur_coords) = c("x", "y")
+    
+    # attach cell identity explicitly
+    cur_coords$cell = cur_cell
+    
+    # order columns
+    cur_coords = cur_coords[, c("cell", "x", "y")]
+    
+    return(cur_coords)
+  })
+  
+  coords = dplyr::bind_rows(coords_list)
+  
   geoms = CreateFOV(
     coords = list(
-      "centroids" = CreateCentroids(centroids),
+      "centroids" = CreateCentroids(centroids_df, nsides = Inf, radius = 70),
       "segmentation" = CreateSegmentation(coords)
       ),
     type = c("segmentation", "centroids"),
