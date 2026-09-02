@@ -1,3 +1,486 @@
+#' Make and Filter Pairwise Statistical Comparisons
+#'
+#' Builds the observed factor cells, generates the biologically relevant
+#' pairwise contrasts, performs a single family of pairwise tests, applies the
+#' requested multiple-comparison correction, and filters on the adjusted
+#' p-value threshold. This function performs no bracket positioning and does
+#' not require ggplot2 or ggsignif.
+#'
+#' @inheritParams compact_pairwise_signif
+#'
+#' @return An object of class `pairwise_comparison_result`, containing:
+#'   \describe{
+#'     \item{comparisons}{A data frame of comparisons passing `alpha`.}
+#'     \item{all_comparisons}{Every biologically retained comparison, including
+#'       raw p-values, adjusted p-values, and test errors.}
+#'     \item{groups}{Observed factor cells with plotting coordinates, sample
+#'       sizes, and response maxima.}
+#'     \item{normality}{Cell-level Shapiro-Wilk results used by `test = "auto"`.}
+#'     \item{plot_data}{A copy of `data` with standardized plotting columns.}
+#'     \item{observed_y}{The finite response values used for testing and layout.}
+#'     \item{method}{The test family actually used.}
+#'     \item{settings}{The selected x layout and dodge width.}
+#'   }
+#'
+#' @seealso [position_pairwise_significance()], [compact_pairwise_signif()]
+#' @export
+#'
+#' @examples
+#' staged_data <- transform(ToothGrowth, dose = factor(dose))
+#' staged_tests <- make_pairwise_comparisons(
+#'   staged_data,
+#'   response = "len",
+#'   factor1 = "dose",
+#'   test = "t"
+#' )
+#' staged_bars <- position_pairwise_significance(
+#'   staged_tests,
+#'   annotation = "stars",
+#'   panel_height_mm = 85,
+#'   y_min = 0
+#' )
+#' staged_bars[, c("f1_1", "f1_2", "padj", "y_position")]
+#' @md
+make_pairwise_comparisons <- function(
+    data,
+    response,
+    factor1,
+    factor2 = NULL,
+    test = c("t", "wilcox", "auto"),
+    test_args = list(),
+    normality_alpha = 0.05,
+    min_n = 2L,
+    keep = NULL,
+    p_adjust_method = "fdr",
+    alpha = 0.05,
+    x_layout = c("dodge", "interaction"),
+    dodge_width = 0.75,
+    interaction_sep = "_") {
+
+  if (!is.data.frame(data)) stop("`data` must be a data.frame.")
+  nm <- c(response, factor1, factor2)
+  nm <- nm[!is.na(nm)]
+  if (!all(nm %in% names(data))) {
+    stop("Unknown column(s): ", paste(setdiff(nm, names(data)), collapse = ", "))
+  }
+  if (!is.numeric(data[[response]])) stop("`response` must name a numeric column.")
+  if (!is.null(factor2) && identical(factor1, factor2)) {
+    stop("`factor1` and `factor2` must be different columns.")
+  }
+  if (!is.list(test_args)) stop("`test_args` must be a list.")
+  if (length(alpha) != 1L || !is.finite(alpha) || alpha < 0 || alpha > 1) {
+    stop("`alpha` must be a number between 0 and 1.")
+  }
+  if (length(normality_alpha) != 1L || !is.finite(normality_alpha) ||
+      normality_alpha < 0 || normality_alpha > 1) {
+    stop("`normality_alpha` must be a number between 0 and 1.")
+  }
+  if (length(min_n) != 1L || !is.finite(min_n) || min_n < 1) {
+    stop("`min_n` must be a positive number.")
+  }
+
+  x_layout <- match.arg(x_layout)
+  if (is.null(factor2)) x_layout <- "interaction"
+
+  as_plot_factor <- function(x) {
+    if (is.factor(x)) droplevels(x) else factor(x, levels = unique(x[!is.na(x)]))
+  }
+
+  needed <- c(response, factor1, factor2)
+  ok <- stats::complete.cases(data[, needed, drop = FALSE]) &
+    is.finite(data[[response]])
+  d <- data[ok, , drop = FALSE]
+  if (nrow(d) == 0L) stop("No complete, finite observations remain.")
+
+  d$.sig_f1 <- as_plot_factor(d[[factor1]])
+  if (nlevels(d$.sig_f1) < 2L && is.null(factor2)) {
+    stop("At least two observed groups are required.")
+  }
+  if (!is.null(factor2)) d$.sig_f2 <- as_plot_factor(d[[factor2]])
+
+  f1_code <- as.integer(d$.sig_f1)
+  f2_code <- if (is.null(factor2)) rep.int(1L, nrow(d)) else as.integer(d$.sig_f2)
+  row_key <- paste(f1_code, f2_code, sep = ":")
+  key_table <- unique(data.frame(f1_code = f1_code, f2_code = f2_code))
+  key_table <- key_table[order(key_table$f1_code, key_table$f2_code), , drop = FALSE]
+  group_key <- paste(key_table$f1_code, key_table$f2_code, sep = ":")
+  d$.sig_group <- match(row_key, group_key)
+
+  groups <- data.frame(
+    group = seq_len(nrow(key_table)),
+    factor1 = levels(d$.sig_f1)[key_table$f1_code],
+    stringsAsFactors = FALSE
+  )
+  if (!is.null(factor2)) {
+    groups$factor2 <- levels(d$.sig_f2)[key_table$f2_code]
+  }
+
+  if (is.null(factor2)) {
+    groups$x <- key_table$f1_code
+  } else if (x_layout == "dodge") {
+    n2 <- nlevels(d$.sig_f2)
+    groups$x <- key_table$f1_code +
+      (key_table$f2_code - (n2 + 1) / 2) * (dodge_width / n2)
+  } else {
+    groups$x <- seq_len(nrow(groups))
+  }
+
+  values <- split(d[[response]], d$.sig_group)
+  values <- values[as.character(seq_len(nrow(groups)))]
+  groups$n <- vapply(values, length, integer(1))
+  groups$y_max <- vapply(values, max, numeric(1), na.rm = TRUE)
+  if (nrow(groups) < 2L) stop("At least two observed groups are required.")
+
+  plot_data <- data
+  plot_f1 <- factor(plot_data[[factor1]], levels = levels(d$.sig_f1))
+  plot_f2 <- if (is.null(factor2)) {
+    factor(rep("(one factor)", nrow(plot_data)))
+  } else {
+    factor(plot_data[[factor2]], levels = levels(d$.sig_f2))
+  }
+  plot_key <- paste(
+    as.integer(plot_f1),
+    if (is.null(factor2)) 1L else as.integer(plot_f2),
+    sep = ":"
+  )
+  plot_gid <- match(plot_key, group_key)
+
+  if (is.null(factor2) || x_layout == "dodge") {
+    plot_data$.signif_x <- plot_f1
+  } else {
+    raw_labels <- paste(groups$factor1, groups$factor2, sep = interaction_sep)
+    group_labels <- make.unique(raw_labels)
+    plot_data$.signif_x <- factor(group_labels[plot_gid], levels = group_labels)
+  }
+  plot_data$.signif_y <- plot_data[[response]]
+  plot_data$.signif_fill <- plot_f2
+  plot_data$.signif_group <- plot_gid
+
+  pair_index <- utils::combn(seq_len(nrow(groups)), 2L)
+  comp <- data.frame(
+    group1 = pair_index[1L, ],
+    group2 = pair_index[2L, ],
+    stringsAsFactors = FALSE
+  )
+  comp$f1_1 <- groups$factor1[comp$group1]
+  comp$f1_2 <- groups$factor1[comp$group2]
+  if (!is.null(factor2)) {
+    comp$f2_1 <- groups$factor2[comp$group1]
+    comp$f2_2 <- groups$factor2[comp$group2]
+  }
+  comp$x1 <- groups$x[comp$group1]
+  comp$x2 <- groups$x[comp$group2]
+  comp$xmin <- pmin(comp$x1, comp$x2)
+  comp$xmax <- pmax(comp$x1, comp$x2)
+
+  if (is.null(keep)) {
+    keep_row <- if (is.null(factor2)) {
+      rep(TRUE, nrow(comp))
+    } else {
+      comp$f1_1 == comp$f1_2 | comp$f2_1 == comp$f2_2
+    }
+  } else {
+    if (!is.function(keep)) stop("`keep` must be NULL or a function.")
+    keep_row <- keep(comp)
+    if (!is.logical(keep_row) || length(keep_row) != nrow(comp) || anyNA(keep_row)) {
+      stop("`keep(comp)` must return one non-missing logical value per comparison.")
+    }
+  }
+  comp <- comp[keep_row, , drop = FALSE]
+  rownames(comp) <- NULL
+  if (nrow(comp) == 0L) stop("The comparison filter removed every comparison.")
+
+  normality <- data.frame(
+    group = groups$group,
+    n = groups$n,
+    shapiro_p = NA_real_,
+    stringsAsFactors = FALSE
+  )
+  normality$shapiro_p <- vapply(values, function(z) {
+    if (length(z) < 3L || length(z) > 5000L || length(unique(z)) < 3L) {
+      return(NA_real_)
+    }
+    tryCatch(stats::shapiro.test(z)$p.value, error = function(e) NA_real_)
+  }, numeric(1))
+
+  if (is.function(test)) {
+    test_fun <- test
+    test_name <- "custom"
+  } else {
+    test <- match.arg(test)
+    if (test == "auto") {
+      test <- if (all(!is.na(normality$shapiro_p)) &&
+                  all(normality$shapiro_p > normality_alpha)) "t" else "wilcox"
+    }
+    test_fun <- if (test == "t") stats::t.test else stats::wilcox.test
+    test_name <- test
+  }
+
+  test_one <- function(i) {
+    x <- values[[comp$group1[i]]]
+    y <- values[[comp$group2[i]]]
+    if (length(x) < min_n || length(y) < min_n) {
+      return(list(
+        p = NA_real_,
+        error = paste0("fewer than ", min_n, " observations in a group")
+      ))
+    }
+    ans <- tryCatch(
+      do.call(test_fun, c(list(x = x, y = y), test_args)),
+      error = function(e) e
+    )
+    if (inherits(ans, "error")) {
+      list(p = NA_real_, error = conditionMessage(ans))
+    } else if (is.null(ans$p.value) || length(ans$p.value) != 1L) {
+      list(p = NA_real_, error = "test did not return one `p.value`")
+    } else {
+      list(p = as.numeric(ans$p.value), error = NA_character_)
+    }
+  }
+
+  tested <- lapply(seq_len(nrow(comp)), test_one)
+  comp$p_value <- vapply(tested, `[[`, numeric(1), "p")
+  comp$test_error <- vapply(tested, `[[`, character(1), "error")
+  comp$test <- test_name
+  comp$padj <- NA_real_
+  valid_p <- is.finite(comp$p_value)
+  comp$padj[valid_p] <- stats::p.adjust(
+    comp$p_value[valid_p], method = p_adjust_method
+  )
+
+  all_comparisons <- comp
+  comparisons <- comp[!is.na(comp$padj) & comp$padj <= alpha, , drop = FALSE]
+  rownames(comparisons) <- NULL
+
+  structure(
+    list(
+      comparisons = comparisons,
+      all_comparisons = all_comparisons,
+      groups = groups,
+      normality = normality,
+      plot_data = plot_data,
+      observed_y = d[[response]],
+      method = test_name,
+      settings = list(x_layout = x_layout, dodge_width = dodge_width)
+    ),
+    class = "pairwise_comparison_result"
+  )
+}
+
+
+#' Position Pairwise Significance Brackets
+#'
+#' Adds annotations and compact y positions to a filtered pairwise-comparison
+#' data frame. The first argument may be the object returned by
+#' [make_pairwise_comparisons()] or a comparison data frame accompanied by
+#' `groups` and `observed_y`.
+#'
+#' @param comparisons A `pairwise_comparison_result` returned by
+#'   [make_pairwise_comparisons()], or a data frame containing `padj`,
+#'   `xmin`, and `xmax` columns.
+#' @param groups `NULL` when `comparisons` is a `pairwise_comparison_result`;
+#'   otherwise, a data frame containing numeric `x` and `y_max` columns.
+#' @param observed_y `NULL` when `comparisons` is a
+#'   `pairwise_comparison_result`; otherwise, the finite response values used
+#'   to establish the y-axis range.
+#' @inheritParams compact_pairwise_signif
+#'
+#' @return The final comparison data frame, including `annotation`, `roof`,
+#'   `span`, `y_position`, `group`, and `lane_order`. Its recommended two-value
+#'   y-axis range is stored in `attr(result, "ylim")`, and the physical layout
+#'   parameters are stored in `attr(result, "layout_settings")`.
+#'
+#' @seealso [make_pairwise_comparisons()], [compact_pairwise_signif()]
+#' @export
+#' @md
+position_pairwise_significance <- function(
+    comparisons,
+    groups = NULL,
+    observed_y = NULL,
+    annotation = c("q", "stars", "none"),
+    binarize_significance = FALSE,
+    q_digits = 2L,
+    textsize = 3.88,
+    lineheight = 1.2,
+    panel_height_mm = 85,
+    data_gap_mm = 2,
+    bar_gap_mm = 1.5,
+    top_margin_mm = 1.5,
+    y_min = NULL) {
+
+  if (inherits(comparisons, "pairwise_comparison_result")) {
+    comparison_result <- comparisons
+    comparisons <- comparison_result$comparisons
+    if (is.null(groups)) groups <- comparison_result$groups
+    if (is.null(observed_y)) observed_y <- comparison_result$observed_y
+  }
+
+  if (!is.data.frame(comparisons)) stop("`comparisons` must be a data frame or comparison result.")
+  if (!is.data.frame(groups)) stop("`groups` must be a data frame.")
+  comparison_columns <- c("padj", "xmin", "xmax")
+  group_columns <- c("x", "y_max")
+  if (!all(comparison_columns %in% names(comparisons))) {
+    stop("`comparisons` is missing: ",
+         paste(setdiff(comparison_columns, names(comparisons)), collapse = ", "))
+  }
+  if (!all(group_columns %in% names(groups))) {
+    stop("`groups` is missing: ",
+         paste(setdiff(group_columns, names(groups)), collapse = ", "))
+  }
+  if (!is.numeric(observed_y)) stop("`observed_y` must be numeric.")
+  observed_y <- observed_y[is.finite(observed_y)]
+  if (!length(observed_y)) stop("`observed_y` has no finite values.")
+  if (!is.logical(binarize_significance) ||
+      length(binarize_significance) != 1L || is.na(binarize_significance)) {
+    stop("`binarize_significance` must be TRUE or FALSE.")
+  }
+  if (panel_height_mm <= 0 || textsize < 0 || lineheight <= 0 ||
+      data_gap_mm < 0 || bar_gap_mm < 0 || top_margin_mm < 0) {
+    stop("Physical-size arguments must be non-negative and `panel_height_mm`/`lineheight` positive.")
+  }
+
+  if (is.function(annotation)) {
+    annotation_fun <- annotation
+    annotation_name <- "custom"
+  } else {
+    annotation_name <- match.arg(annotation)
+    annotation_fun <- NULL
+  }
+
+  data_min <- min(observed_y)
+  data_max <- max(observed_y)
+  raw_span <- data_max - data_min
+  if (is.null(y_min)) {
+    scale_min <- if (raw_span > 0) {
+      data_min
+    } else {
+      data_min - max(abs(data_min), 1) * 0.1
+    }
+  } else {
+    scale_min <- y_min
+    if (!is.finite(scale_min) || scale_min > data_min) {
+      stop("`y_min` must be finite and no greater than the data minimum.")
+    }
+  }
+  base_span <- data_max - scale_min
+  if (!is.finite(base_span) || base_span <= 0) {
+    base_span <- max(abs(data_max), 1) * 0.1
+  }
+
+  sig <- comparisons
+  if (!is.null(annotation_fun)) {
+    sig$annotation <- vapply(sig$padj, function(z) {
+      ans <- annotation_fun(z)
+      if (length(ans) != 1L) {
+        stop("The annotation function must return one label per q-value.")
+      }
+      as.character(ans)
+    }, character(1))
+  } else if (annotation_name == "q") {
+    fmt <- paste0("q = %.", as.integer(q_digits), "g")
+    sig$annotation <- sprintf(fmt, sig$padj)
+  } else if (annotation_name == "stars") {
+    if (binarize_significance) {
+      sig$annotation <- rep("*", nrow(sig))
+    } else {
+      sig$annotation <- ifelse(sig$padj <= 1e-4, "****",
+                        ifelse(sig$padj <= 1e-3, "***",
+                        ifelse(sig$padj <= 1e-2, "**", "*")))
+    }
+  } else {
+    sig$annotation <- rep("", nrow(sig))
+  }
+
+  if (nrow(sig) == 0L) {
+    sig$roof <- numeric(0)
+    sig$span <- numeric(0)
+    sig$y_position <- numeric(0)
+    sig$group <- integer(0)
+    sig$lane_order <- integer(0)
+    attr(sig, "ylim") <- c(scale_min, data_max)
+    attr(sig, "layout_settings") <- list(
+      panel_height_mm = panel_height_mm,
+      textsize = textsize,
+      binarize_significance = binarize_significance
+    )
+    return(sig)
+  }
+
+  n_lines <- lengths(strsplit(sig$annotation, "\n", fixed = TRUE))
+  annotation_mm <- ifelse(
+    nzchar(sig$annotation), textsize * lineheight * n_lines, 0
+  )
+
+  sig$roof <- vapply(seq_len(nrow(sig)), function(i) {
+    crossed <- groups$x >= sig$xmin[i] & groups$x <= sig$xmax[i]
+    if (!any(crossed)) stop("A bracket crosses no group x coordinates.")
+    max(groups$y_max[crossed])
+  }, numeric(1))
+  sig$span <- sig$xmax - sig$xmin
+
+  packing_order <- order(sig$roof, sig$span, sig$xmin, sig$xmax)
+  overlaps <- function(i, j) {
+    !(sig$xmax[i] < sig$xmin[j] || sig$xmin[i] > sig$xmax[j])
+  }
+
+  layout_at_span <- function(axis_span) {
+    y <- rep(NA_real_, nrow(sig))
+    for (k in seq_along(packing_order)) {
+      i <- packing_order[k]
+      candidate <- sig$roof[i] + (data_gap_mm / panel_height_mm) * axis_span
+      if (k > 1L) {
+        previous <- packing_order[seq_len(k - 1L)]
+        previous <- previous[vapply(
+          previous, function(j) overlaps(i, j), logical(1)
+        )]
+        if (length(previous)) {
+          above_previous <- y[previous] +
+            ((annotation_mm[previous] + bar_gap_mm) / panel_height_mm) * axis_span
+          candidate <- max(candidate, above_previous)
+        }
+      }
+      y[i] <- candidate
+    }
+    y
+  }
+
+  axis_span <- base_span
+  converged <- FALSE
+  for (iter in seq_len(200L)) {
+    y_now <- layout_at_span(axis_span)
+    occupied_top <- max(
+      data_max,
+      y_now + (annotation_mm / panel_height_mm) * axis_span
+    )
+    new_span <- occupied_top - scale_min +
+      (top_margin_mm / panel_height_mm) * axis_span
+    if (!is.finite(new_span) || new_span > base_span * 1e8) break
+    if (abs(new_span - axis_span) <= 1e-10 * max(1, axis_span)) {
+      axis_span <- new_span
+      converged <- TRUE
+      break
+    }
+    axis_span <- new_span
+  }
+  if (!converged) {
+    stop("The requested brackets/text cannot fit in `panel_height_mm`. ",
+         "Increase that value (and export the plot at the corresponding height), ",
+         "or show fewer comparisons.")
+  }
+
+  sig$y_position <- layout_at_span(axis_span)
+  sig$group <- seq_len(nrow(sig))
+  sig$lane_order <- match(seq_len(nrow(sig)), packing_order)
+  attr(sig, "ylim") <- c(scale_min, scale_min + axis_span)
+  attr(sig, "layout_settings") <- list(
+    panel_height_mm = panel_height_mm,
+    textsize = textsize,
+    binarize_significance = binarize_significance
+  )
+  sig
+}
+
+
 #' Test Pairwise Comparisons and Compactly Place Significance Brackets
 #'
 #' Performs all relevant pairwise tests for a one- or two-factor design,
@@ -39,7 +522,7 @@
 #' @param p_adjust_method A method accepted by [stats::p.adjust()]. Adjustment
 #'   is performed only after `keep` has removed irrelevant comparisons.
 #' @param alpha The adjusted-p-value threshold. Comparisons with
-#'   `q_value <= alpha` are drawn.
+#'   `padj <= alpha` are drawn.
 #' @param annotation One of `"q"`, `"stars"`, or `"none"`, or a function that
 #'   converts one q-value into one character label. Star thresholds are
 #'   `0.05`, `0.01`, `0.001`, and `0.0001`.
@@ -84,6 +567,12 @@
 #'   defaults; for example, `list(tip_length = 0.01, colour = "navy")`.
 #'
 #' @details
+#' The wrapper delegates statistical work to [make_pairwise_comparisons()] and
+#' passes its result to [position_pairwise_significance()]. Both helpers are
+#' exported, so callers may inspect or modify the filtered comparisons between
+#' the two stages. The wrapper then creates the optional ggsignif layer and
+#' assembles the backward-compatible result object.
+#'
 #' Rows with missing grouping values, missing responses, or non-finite
 #' responses are excluded from testing and layout calculations. The input
 #' factors are tracked separately rather than parsed from a concatenated group
@@ -129,7 +618,8 @@
 #'     \item{settings}{Selected layout and physical-size settings.}
 #'   }
 #'
-#' @seealso [stats::t.test()], [stats::wilcox.test()], [stats::p.adjust()],
+#' @seealso [make_pairwise_comparisons()], [position_pairwise_significance()],
+#'   [stats::t.test()], [stats::wilcox.test()], [stats::p.adjust()],
 #'   [ggsignif::geom_signif()]
 #' @keywords htest
 #' @export
@@ -191,334 +681,46 @@ compact_pairwise_signif <- function(
     make_layer = TRUE,
     geom_args = list()) {
 
-  ## ---------- checks ----------
-  if (!is.data.frame(data)) stop("`data` must be a data.frame.")
-  nm <- c(response, factor1, factor2)
-  nm <- nm[!is.null(nm) & !is.na(nm)]
-  if (!all(nm %in% names(data))) {
-    stop("Unknown column(s): ", paste(setdiff(nm, names(data)), collapse = ", "))
+  if (!is.logical(make_layer) || length(make_layer) != 1L || is.na(make_layer)) {
+    stop("`make_layer` must be TRUE or FALSE.")
   }
-  if (!is.numeric(data[[response]])) stop("`response` must name a numeric column.")
-  if (!is.null(factor2) && identical(factor1, factor2)) {
-    stop("`factor1` and `factor2` must be different columns.")
-  }
-  if (!is.list(test_args) || !is.list(geom_args)) {
-    stop("`test_args` and `geom_args` must be lists.")
-  }
-  if (length(alpha) != 1L || !is.finite(alpha) || alpha < 0 || alpha > 1) {
-    stop("`alpha` must be a number between 0 and 1.")
-  }
-  if (!is.logical(binarize_significance) ||
-      length(binarize_significance) != 1L || is.na(binarize_significance)) {
-    stop("`binarize_significance` must be TRUE or FALSE.")
-  }
-  if (panel_height_mm <= 0 || textsize < 0 || lineheight <= 0 ||
-      data_gap_mm < 0 || bar_gap_mm < 0 || top_margin_mm < 0) {
-    stop("Physical-size arguments must be non-negative and `panel_height_mm`/`lineheight` positive.")
-  }
+  if (!is.list(geom_args)) stop("`geom_args` must be a list.")
 
-  x_layout <- match.arg(x_layout)
-  if (is.null(factor2)) x_layout <- "interaction"
-
-  if (is.function(annotation)) {
-    annotation_fun <- annotation
-    annotation_name <- "custom"
-  } else {
-    annotation_name <- match.arg(annotation)
-    annotation_fun <- NULL
-  }
-
-  as_plot_factor <- function(x) {
-    if (is.factor(x)) droplevels(x) else factor(x, levels = unique(x[!is.na(x)]))
-  }
-
-  needed <- c(response, factor1, factor2)
-  needed <- needed[!vapply(needed, is.null, logical(1))]
-  ok <- stats::complete.cases(data[, needed, drop = FALSE]) & is.finite(data[[response]])
-  d <- data[ok, , drop = FALSE]
-  if (nrow(d) == 0L) stop("No complete, finite observations remain.")
-
-  d$.sig_f1 <- as_plot_factor(d[[factor1]])
-  if (nlevels(d$.sig_f1) < 2L && is.null(factor2)) {
-    stop("At least two observed groups are required.")
-  }
-  if (!is.null(factor2)) d$.sig_f2 <- as_plot_factor(d[[factor2]])
-
-  f1_code <- as.integer(d$.sig_f1)
-  f2_code <- if (is.null(factor2)) rep.int(1L, nrow(d)) else as.integer(d$.sig_f2)
-  row_key <- paste(f1_code, f2_code, sep = ":")
-  key_table <- unique(data.frame(f1_code = f1_code, f2_code = f2_code))
-  key_table <- key_table[order(key_table$f1_code, key_table$f2_code), , drop = FALSE]
-  group_key <- paste(key_table$f1_code, key_table$f2_code, sep = ":")
-  d$.sig_group <- match(row_key, group_key)
-
-  groups <- data.frame(
-    group = seq_len(nrow(key_table)),
-    factor1 = levels(d$.sig_f1)[key_table$f1_code],
-    stringsAsFactors = FALSE
+  comparison_result <- make_pairwise_comparisons(
+    data = data,
+    response = response,
+    factor1 = factor1,
+    factor2 = factor2,
+    test = test,
+    test_args = test_args,
+    normality_alpha = normality_alpha,
+    min_n = min_n,
+    keep = keep,
+    p_adjust_method = p_adjust_method,
+    alpha = alpha,
+    x_layout = x_layout,
+    dodge_width = dodge_width,
+    interaction_sep = interaction_sep
   )
-  if (!is.null(factor2)) {
-    groups$factor2 <- levels(d$.sig_f2)[key_table$f2_code]
-  }
 
-  if (is.null(factor2)) {
-    groups$x <- key_table$f1_code
-  } else if (x_layout == "dodge") {
-    n2 <- nlevels(d$.sig_f2)
-    groups$x <- key_table$f1_code +
-      (key_table$f2_code - (n2 + 1) / 2) * (dodge_width / n2)
-  } else {
-    groups$x <- seq_len(nrow(groups))
-  }
-
-  values <- split(d[[response]], d$.sig_group)
-  values <- values[as.character(seq_len(nrow(groups)))]
-  groups$n <- vapply(values, length, integer(1))
-  groups$y_max <- vapply(values, max, numeric(1), na.rm = TRUE)
-
-  if (nrow(groups) < 2L) stop("At least two observed groups are required.")
-
-  ## Standardized columns make the returned data easy to plot and guarantee
-  ## that discrete-axis order matches the numeric bracket coordinates.
-  plot_data <- data
-  plot_f1 <- factor(plot_data[[factor1]], levels = levels(d$.sig_f1))
-  plot_f2 <- if (is.null(factor2)) {
-    factor(rep("(one factor)", nrow(plot_data)))
-  } else {
-    factor(plot_data[[factor2]], levels = levels(d$.sig_f2))
-  }
-  plot_key <- paste(as.integer(plot_f1),
-                    if (is.null(factor2)) 1L else as.integer(plot_f2), sep = ":")
-  plot_gid <- match(plot_key, group_key)
-
-  if (is.null(factor2) || x_layout == "dodge") {
-    plot_data$.signif_x <- plot_f1
-  } else {
-    raw_labels <- paste(groups$factor1, groups$factor2, sep = interaction_sep)
-    group_labels <- make.unique(raw_labels)
-    plot_data$.signif_x <- factor(group_labels[plot_gid], levels = group_labels)
-  }
-  plot_data$.signif_y <- plot_data[[response]]
-  plot_data$.signif_fill <- plot_f2
-  plot_data$.signif_group <- plot_gid
-
-  ## ---------- comparison metadata and biological filter ----------
-  pair_index <- utils::combn(seq_len(nrow(groups)), 2L)
-  comp <- data.frame(
-    group1 = pair_index[1L, ],
-    group2 = pair_index[2L, ],
-    stringsAsFactors = FALSE
+  positioned_comparisons <- position_pairwise_significance(
+    comparisons = comparison_result,
+    annotation = annotation,
+    binarize_significance = binarize_significance,
+    q_digits = q_digits,
+    textsize = textsize,
+    lineheight = lineheight,
+    panel_height_mm = panel_height_mm,
+    data_gap_mm = data_gap_mm,
+    bar_gap_mm = bar_gap_mm,
+    top_margin_mm = top_margin_mm,
+    y_min = y_min
   )
-  comp$f1_1 <- groups$factor1[comp$group1]
-  comp$f1_2 <- groups$factor1[comp$group2]
-  if (!is.null(factor2)) {
-    comp$f2_1 <- groups$factor2[comp$group1]
-    comp$f2_2 <- groups$factor2[comp$group2]
-  }
-  comp$x1 <- groups$x[comp$group1]
-  comp$x2 <- groups$x[comp$group2]
-  comp$xmin <- pmin(comp$x1, comp$x2)
-  comp$xmax <- pmax(comp$x1, comp$x2)
-
-  if (is.null(keep)) {
-    keep_row <- if (is.null(factor2)) {
-      rep(TRUE, nrow(comp))
-    } else {
-      comp$f1_1 == comp$f1_2 | comp$f2_1 == comp$f2_2
-    }
-  } else {
-    if (!is.function(keep)) stop("`keep` must be NULL or a function.")
-    keep_row <- keep(comp)
-    if (!is.logical(keep_row) || length(keep_row) != nrow(comp) || anyNA(keep_row)) {
-      stop("`keep(comp)` must return one non-missing logical value per comparison.")
-    }
-  }
-  comp <- comp[keep_row, , drop = FALSE]
-  rownames(comp) <- NULL
-  if (nrow(comp) == 0L) stop("The comparison filter removed every comparison.")
-
-  ## ---------- choose and run tests ----------
-  normality <- data.frame(
-    group = groups$group,
-    n = groups$n,
-    shapiro_p = NA_real_,
-    stringsAsFactors = FALSE
-  )
-  normality$shapiro_p <- vapply(values, function(z) {
-    if (length(z) < 3L || length(z) > 5000L || length(unique(z)) < 3L) return(NA_real_)
-    tryCatch(stats::shapiro.test(z)$p.value, error = function(e) NA_real_)
-  }, numeric(1))
-
-  if (is.function(test)) {
-    test_fun <- test
-    test_name <- "custom"
-  } else {
-    test <- match.arg(test)
-    if (test == "auto") {
-      ## Conservative rule: use one test family for all contrasts.
-      test <- if (all(!is.na(normality$shapiro_p)) &&
-                  all(normality$shapiro_p > normality_alpha)) "t" else "wilcox"
-    }
-    test_fun <- if (test == "t") stats::t.test else stats::wilcox.test
-    test_name <- test
-  }
-
-  test_one <- function(i) {
-    x <- values[[comp$group1[i]]]
-    y <- values[[comp$group2[i]]]
-    if (length(x) < min_n || length(y) < min_n) {
-      return(list(p = NA_real_, error = paste0("fewer than ", min_n,
-                                               " observations in a group")))
-    }
-    ans <- tryCatch(
-      do.call(test_fun, c(list(x = x, y = y), test_args)),
-      error = function(e) e
-    )
-    if (inherits(ans, "error")) {
-      list(p = NA_real_, error = conditionMessage(ans))
-    } else if (is.null(ans$p.value) || length(ans$p.value) != 1L) {
-      list(p = NA_real_, error = "test did not return one `p.value`")
-    } else {
-      list(p = as.numeric(ans$p.value), error = NA_character_)
-    }
-  }
-
-  tested <- lapply(seq_len(nrow(comp)), test_one)
-  comp$p_value <- vapply(tested, `[[`, numeric(1), "p")
-  comp$test_error <- vapply(tested, `[[`, character(1), "error")
-  comp$test <- test_name
-  comp$q_value <- NA_real_
-  valid_p <- is.finite(comp$p_value)
-  comp$q_value[valid_p] <- stats::p.adjust(comp$p_value[valid_p],
-                                           method = p_adjust_method)
-
-  all_comparisons <- comp
-  sig <- comp[!is.na(comp$q_value) & comp$q_value <= alpha, , drop = FALSE]
-  rownames(sig) <- NULL
-
-  ## Return a useful empty result instead of asking ggsignif to draw zero rows.
-  observed_y <- d[[response]]
-  data_min <- min(observed_y)
-  data_max <- max(observed_y)
-  raw_span <- data_max - data_min
-  if (is.null(y_min)) {
-    scale_min <- if (raw_span > 0) data_min else data_min - max(abs(data_min), 1) * 0.1
-  } else {
-    scale_min <- y_min
-    if (!is.finite(scale_min) || scale_min > data_min) {
-      stop("`y_min` must be finite and no greater than the data minimum.")
-    }
-  }
-  base_span <- data_max - scale_min
-  if (!is.finite(base_span) || base_span <= 0) base_span <- max(abs(data_max), 1) * 0.1
-
-  if (nrow(sig) == 0L) {
-    out <- list(
-      comparisons = sig,
-      all_comparisons = all_comparisons,
-      groups = groups,
-      normality = normality,
-      plot_data = plot_data,
-      layer = NULL,
-      ylim = c(scale_min, data_max),
-      method = test_name,
-      settings = list(x_layout = x_layout, dodge_width = dodge_width,
-                      panel_height_mm = panel_height_mm, textsize = textsize,
-                      binarize_significance = binarize_significance)
-    )
-    return(structure(out, class = "compact_pairwise_signif"))
-  }
-
-  ## ---------- labels ----------
-  if (!is.null(annotation_fun)) {
-    sig$annotation <- vapply(sig$q_value, function(z) {
-      ans <- annotation_fun(z)
-      if (length(ans) != 1L) stop("The annotation function must return one label per q-value.")
-      as.character(ans)
-    }, character(1))
-  } else if (annotation_name == "q") {
-    fmt <- paste0("q = %.", as.integer(q_digits), "g")
-    sig$annotation <- sprintf(fmt, sig$q_value)
-  } else if (annotation_name == "stars") {
-    if (binarize_significance) {
-      sig$annotation <- "*"
-    } else {
-      sig$annotation <- ifelse(sig$q_value <= 1e-4, "****",
-                        ifelse(sig$q_value <= 1e-3, "***",
-                        ifelse(sig$q_value <= 1e-2, "**", "*")))
-    }
-  } else {
-    sig$annotation <- ""
-  }
-
-  n_lines <- lengths(strsplit(sig$annotation, "\n", fixed = TRUE))
-  annotation_mm <- ifelse(nzchar(sig$annotation),
-                          textsize * lineheight * n_lines, 0)
-
-  ## The roof for a bracket is the highest observation at every group centre
-  ## crossed by its horizontal segment, not merely the two endpoint maxima.
-  sig$roof <- vapply(seq_len(nrow(sig)), function(i) {
-    crossed <- groups$x >= sig$xmin[i] & groups$x <= sig$xmax[i]
-    max(groups$y_max[crossed])
-  }, numeric(1))
-  sig$span <- sig$xmax - sig$xmin
-
-  ## Low-roof, short brackets get first claim on low lanes. Two brackets may
-  ## share a lane whenever their closed x intervals do not overlap.
-  packing_order <- order(sig$roof, sig$span, sig$xmin, sig$xmax)
-  overlaps <- function(i, j) {
-    !(sig$xmax[i] < sig$xmin[j] || sig$xmin[i] > sig$xmax[j])
-  }
-
-  layout_at_span <- function(axis_span) {
-    y <- rep(NA_real_, nrow(sig))
-    for (k in seq_along(packing_order)) {
-      i <- packing_order[k]
-      candidate <- sig$roof[i] + (data_gap_mm / panel_height_mm) * axis_span
-      if (k > 1L) {
-        previous <- packing_order[seq_len(k - 1L)]
-        previous <- previous[vapply(previous, function(j) overlaps(i, j), logical(1))]
-        if (length(previous)) {
-          above_previous <- y[previous] +
-            ((annotation_mm[previous] + bar_gap_mm) / panel_height_mm) * axis_span
-          candidate <- max(candidate, above_previous)
-        }
-      }
-      y[i] <- candidate
-    }
-    y
-  }
-
-  ## Fixed point: mm are converted using the final, not the pre-annotation,
-  ## y range. This is what makes changes in textsize affect spacing correctly.
-  axis_span <- base_span
-  converged <- FALSE
-  for (iter in seq_len(200L)) {
-    y_now <- layout_at_span(axis_span)
-    occupied_top <- max(data_max,
-                        y_now + (annotation_mm / panel_height_mm) * axis_span)
-    new_span <- occupied_top - scale_min +
-      (top_margin_mm / panel_height_mm) * axis_span
-    if (!is.finite(new_span) || new_span > base_span * 1e8) break
-    if (abs(new_span - axis_span) <= 1e-10 * max(1, axis_span)) {
-      axis_span <- new_span
-      converged <- TRUE
-      break
-    }
-    axis_span <- new_span
-  }
-  if (!converged) {
-    stop("The requested brackets/text cannot fit in `panel_height_mm`. ",
-         "Increase that value (and export the plot at the corresponding height), ",
-         "or show fewer comparisons.")
-  }
-
-  sig$y_position <- layout_at_span(axis_span)
-  sig$group <- seq_len(nrow(sig))
-  sig$lane_order <- match(seq_len(nrow(sig)), packing_order)
+  ylim <- attr(positioned_comparisons, "ylim")
+  layout_settings <- attr(positioned_comparisons, "layout_settings")
 
   layer <- NULL
-  if (make_layer) {
+  if (make_layer && nrow(positioned_comparisons) > 0L) {
     if (!requireNamespace("ggplot2", quietly = TRUE) ||
         !requireNamespace("ggsignif", quietly = TRUE)) {
       stop("Install `ggplot2` and `ggsignif`, or call with `make_layer = FALSE`.")
@@ -528,7 +730,7 @@ compact_pairwise_signif <- function(
         xmin = xmin, xmax = xmax, annotations = annotation,
         y_position = y_position, group = group
       ),
-      data = sig,
+      data = positioned_comparisons,
       manual = TRUE,
       inherit.aes = FALSE,
       margin_top = 0,
@@ -537,33 +739,33 @@ compact_pairwise_signif <- function(
       textsize = textsize,
       vjust = 0
     )
-    ## `geom_args` deliberately wins, so tip length, colour, family, etc. can
-    ## be changed without editing the helper.
     layer <- withCallingHandlers(
-      do.call(ggsignif::geom_signif,
-              utils::modifyList(layer_defaults, geom_args)),
+      do.call(
+        ggsignif::geom_signif,
+        utils::modifyList(layer_defaults, geom_args)
+      ),
       warning = function(w) {
         msg <- conditionMessage(w)
         expected <- grepl("Ignoring unknown aesthetics", msg, fixed = TRUE) &&
-          all(vapply(c("xmin", "xmax", "annotations", "y_position"),
-                     grepl, logical(1), x = msg, fixed = TRUE))
+          all(vapply(
+            c("xmin", "xmax", "annotations", "y_position"),
+            grepl, logical(1), x = msg, fixed = TRUE
+          ))
         if (expected) invokeRestart("muffleWarning")
       }
     )
   }
 
   out <- list(
-    comparisons = sig,
-    all_comparisons = all_comparisons,
-    groups = groups,
-    normality = normality,
-    plot_data = plot_data,
+    comparisons = positioned_comparisons,
+    all_comparisons = comparison_result$all_comparisons,
+    groups = comparison_result$groups,
+    normality = comparison_result$normality,
+    plot_data = comparison_result$plot_data,
     layer = layer,
-    ylim = c(scale_min, scale_min + axis_span),
-    method = test_name,
-    settings = list(x_layout = x_layout, dodge_width = dodge_width,
-                    panel_height_mm = panel_height_mm, textsize = textsize,
-                    binarize_significance = binarize_significance)
+    ylim = ylim,
+    method = comparison_result$method,
+    settings = c(comparison_result$settings, layout_settings)
   )
   structure(out, class = "compact_pairwise_signif")
 }
