@@ -18,6 +18,8 @@
 #'     \item{normality}{Cell-level Shapiro-Wilk results used by `test = "auto"`.}
 #'     \item{plot_data}{A copy of `data` with standardized plotting columns.}
 #'     \item{observed_y}{The finite response values used for testing and layout.}
+#'     \item{observed_data}{The response values together with their facet
+#'       membership, when `facet` is supplied.}
 #'     \item{method}{The test family actually used.}
 #'     \item{settings}{The selected x layout and dodge width.}
 #'   }
@@ -46,6 +48,7 @@ make_pairwise_comparisons <- function(
     response,
     factor1,
     factor2 = NULL,
+    facet = NULL,
     test = c("t", "wilcox", "auto"),
     test_args = list(),
     normality_alpha = 0.05,
@@ -54,11 +57,16 @@ make_pairwise_comparisons <- function(
     p_adjust_method = "fdr",
     alpha = 0.05,
     x_layout = c("dodge", "interaction"),
+    facet_scales = c("free_y", "fixed", "free", "free_x"),
     dodge_width = 0.75,
     interaction_sep = "_") {
 
   if (!is.data.frame(data)) stop("`data` must be a data.frame.")
-  nm <- c(response, factor1, factor2)
+  if (!is.null(facet) &&
+      (!is.character(facet) || length(facet) != 1L || is.na(facet))) {
+    stop("`facet` must be NULL or one column name.")
+  }
+  nm <- c(response, factor1, factor2, facet)
   nm <- nm[!is.na(nm)]
   if (!all(nm %in% names(data))) {
     stop("Unknown column(s): ", paste(setdiff(nm, names(data)), collapse = ", "))
@@ -80,7 +88,168 @@ make_pairwise_comparisons <- function(
   }
 
   x_layout <- match.arg(x_layout)
+  facet_scales <- match.arg(facet_scales)
   if (is.null(factor2)) x_layout <- "interaction"
+
+  if (!is.null(facet)) {
+    facet_data <- data[!is.na(data[[facet]]), , drop = FALSE]
+    if (nrow(facet_data) == 0L) stop("No non-missing facet values remain.")
+    facet_values <- unique(as.character(facet_data[[facet]]))
+
+    facet_results <- lapply(facet_values, function(facet_value) {
+      panel_data <- facet_data[
+        as.character(facet_data[[facet]]) == facet_value, , drop = FALSE
+      ]
+      make_pairwise_comparisons(
+        data = panel_data,
+        response = response,
+        factor1 = factor1,
+        factor2 = factor2,
+        facet = NULL,
+        test = test,
+        test_args = test_args,
+        normality_alpha = normality_alpha,
+        min_n = min_n,
+        keep = keep,
+        p_adjust_method = p_adjust_method,
+        alpha = alpha,
+        x_layout = x_layout,
+        facet_scales = facet_scales,
+        dodge_width = dodge_width,
+        interaction_sep = interaction_sep
+      )
+    })
+
+    add_facet <- function(x, facet_value) {
+      x[[facet]] <- rep(facet_value, nrow(x))
+      x
+    }
+    bind_component <- function(component) {
+      pieces <- Map(function(result, facet_value) {
+        add_facet(result[[component]], facet_value)
+      }, facet_results, facet_values)
+      answer <- do.call(rbind, pieces)
+      rownames(answer) <- NULL
+      answer
+    }
+
+    comparisons <- bind_component("comparisons")
+    all_comparisons <- bind_component("all_comparisons")
+    groups <- bind_component("groups")
+    normality <- bind_component("normality")
+    plot_data <- bind_component("plot_data")
+
+    observed_data <- do.call(rbind, Map(function(result, facet_value) {
+      answer <- data.frame(.observed_y = result$observed_y)
+      answer[[facet]] <- rep(facet_value, nrow(answer))
+      answer
+    }, facet_results, facet_values))
+    rownames(observed_data) <- NULL
+
+    ## Fixed x scales use one coordinate system across every panel. Free x
+    ## scales retain the panel-local coordinates calculated by the recursive
+    ## calls above.
+    if (facet_scales %in% c("fixed", "free_y")) {
+      complete_global <- stats::complete.cases(
+        facet_data[, c(response, factor1, factor2), drop = FALSE]
+      ) & is.finite(facet_data[[response]])
+      global_data <- facet_data[complete_global, , drop = FALSE]
+
+      level_values <- function(x) {
+        if (is.factor(x)) levels(droplevels(x)) else unique(as.character(x))
+      }
+      f1_levels <- level_values(global_data[[factor1]])
+      f2_levels <- if (is.null(factor2)) NULL else level_values(global_data[[factor2]])
+
+      coordinate <- function(f1, f2 = NULL) {
+        f1_index <- match(as.character(f1), f1_levels)
+        if (is.null(factor2)) return(f1_index)
+        f2_index <- match(as.character(f2), f2_levels)
+        if (x_layout == "dodge") {
+          n2 <- length(f2_levels)
+          return(f1_index + (f2_index - (n2 + 1) / 2) * (dodge_width / n2))
+        }
+        grid <- unique(data.frame(
+          f1 = as.character(global_data[[factor1]]),
+          f2 = as.character(global_data[[factor2]]),
+          stringsAsFactors = FALSE
+        ))
+        grid$f1_index <- match(grid$f1, f1_levels)
+        grid$f2_index <- match(grid$f2, f2_levels)
+        grid <- grid[order(grid$f1_index, grid$f2_index), , drop = FALSE]
+        lookup <- stats::setNames(
+          seq_len(nrow(grid)), paste(grid$f1, grid$f2, sep = "\r")
+        )
+        unname(lookup[paste(as.character(f1), as.character(f2), sep = "\r")])
+      }
+
+      remap_comparisons <- function(x) {
+        x$x1 <- coordinate(x$f1_1, if (is.null(factor2)) NULL else x$f2_1)
+        x$x2 <- coordinate(x$f1_2, if (is.null(factor2)) NULL else x$f2_2)
+        x$xmin <- pmin(x$x1, x$x2)
+        x$xmax <- pmax(x$x1, x$x2)
+        x
+      }
+      groups$x <- coordinate(
+        groups$factor1,
+        if (is.null(factor2)) NULL else groups$factor2
+      )
+      comparisons <- remap_comparisons(comparisons)
+      all_comparisons <- remap_comparisons(all_comparisons)
+
+      plot_data$.signif_fill <- if (is.null(factor2)) {
+        factor(rep("(one factor)", nrow(plot_data)))
+      } else {
+        factor(plot_data[[factor2]], levels = f2_levels)
+      }
+      if (is.null(factor2) || x_layout == "dodge") {
+        plot_data$.signif_x <- factor(plot_data[[factor1]], levels = f1_levels)
+      } else {
+        grid <- unique(data.frame(
+          f1 = as.character(global_data[[factor1]]),
+          f2 = as.character(global_data[[factor2]]),
+          stringsAsFactors = FALSE
+        ))
+        grid$f1_index <- match(grid$f1, f1_levels)
+        grid$f2_index <- match(grid$f2, f2_levels)
+        grid <- grid[order(grid$f1_index, grid$f2_index), , drop = FALSE]
+        group_labels <- make.unique(paste(grid$f1, grid$f2, sep = interaction_sep))
+        label_lookup <- stats::setNames(
+          group_labels, paste(grid$f1, grid$f2, sep = "\r")
+        )
+        plot_labels <- unname(label_lookup[paste(
+          as.character(plot_data[[factor1]]),
+          as.character(plot_data[[factor2]]),
+          sep = "\r"
+        )])
+        plot_data$.signif_x <- factor(plot_labels, levels = group_labels)
+      }
+    }
+
+    methods <- stats::setNames(
+      vapply(facet_results, function(x) x$method, character(1)),
+      facet_values
+    )
+    return(structure(
+      list(
+        comparisons = comparisons,
+        all_comparisons = all_comparisons,
+        groups = groups,
+        normality = normality,
+        plot_data = plot_data,
+        observed_y = observed_data$.observed_y,
+        observed_data = observed_data,
+        method = methods,
+        settings = list(
+          x_layout = x_layout,
+          dodge_width = dodge_width,
+          facet = facet,
+          facet_scales = facet_scales
+        )
+      ),
+      class = "pairwise_comparison_result"
+    ))
+  }
 
   as_plot_factor <- function(x) {
     if (is.factor(x)) droplevels(x) else factor(x, levels = unique(x[!is.na(x)]))
@@ -260,8 +429,14 @@ make_pairwise_comparisons <- function(
       normality = normality,
       plot_data = plot_data,
       observed_y = d[[response]],
+      observed_data = data.frame(.observed_y = d[[response]]),
       method = test_name,
-      settings = list(x_layout = x_layout, dodge_width = dodge_width)
+      settings = list(
+        x_layout = x_layout,
+        dodge_width = dodge_width,
+        facet = NULL,
+        facet_scales = facet_scales
+      )
     ),
     class = "pairwise_comparison_result"
   )
@@ -281,14 +456,20 @@ make_pairwise_comparisons <- function(
 #' @param groups `NULL` when `comparisons` is a `pairwise_comparison_result`;
 #'   otherwise, a data frame containing numeric `x` and `y_max` columns.
 #' @param observed_y `NULL` when `comparisons` is a
-#'   `pairwise_comparison_result`; otherwise, the finite response values used
-#'   to establish the y-axis range.
+#'   `pairwise_comparison_result`. Without facets, it may otherwise be a
+#'   numeric vector of finite response values. With `facet`, supply a data
+#'   frame containing the facet column and either `.observed_y`, `observed_y`,
+#'   or exactly one other numeric column; alternatively, supply a named list or
+#'   a numeric vector whose names identify facets.
 #' @inheritParams compact_pairwise_signif
 #'
 #' @return The final comparison data frame, including `annotation`, `roof`,
-#'   `span`, `y_position`, `group`, and `lane_order`. Its recommended two-value
-#'   y-axis range is stored in `attr(result, "ylim")`, and the physical layout
-#'   parameters are stored in `attr(result, "layout_settings")`.
+#'   `span`, `y_position`, `group`, and `lane_order`. Without facets, its
+#'   recommended two-value y-axis range is stored in `attr(result, "ylim")`.
+#'   With facets, that attribute is a named list of panel ranges and
+#'   `attr(result, "facet_limits")` is a long data frame suitable for an
+#'   invisible `geom_blank()` scale-training layer. Physical layout parameters
+#'   are stored in `attr(result, "layout_settings")`.
 #'
 #' @seealso [make_pairwise_comparisons()], [compact_pairwise_signif()]
 #' @export
@@ -297,6 +478,8 @@ position_pairwise_significance <- function(
     comparisons,
     groups = NULL,
     observed_y = NULL,
+    facet = NULL,
+    facet_scales = c("free_y", "fixed", "free", "free_x"),
     annotation = c("q", "stars", "none"),
     binarize_significance = FALSE,
     q_digits = 2L,
@@ -308,11 +491,23 @@ position_pairwise_significance <- function(
     top_margin_mm = 1.5,
     y_min = NULL) {
 
+  facet_scales_missing <- missing(facet_scales)
   if (inherits(comparisons, "pairwise_comparison_result")) {
     comparison_result <- comparisons
     comparisons <- comparison_result$comparisons
     if (is.null(groups)) groups <- comparison_result$groups
-    if (is.null(observed_y)) observed_y <- comparison_result$observed_y
+    if (is.null(facet)) facet <- comparison_result$settings$facet
+    if (facet_scales_missing &&
+        !is.null(comparison_result$settings$facet_scales)) {
+      facet_scales <- comparison_result$settings$facet_scales
+    }
+    if (is.null(observed_y)) {
+      observed_y <- if (!is.null(facet)) {
+        comparison_result$observed_data
+      } else {
+        comparison_result$observed_y
+      }
+    }
   }
 
   if (!is.data.frame(comparisons)) stop("`comparisons` must be a data frame or comparison result.")
@@ -327,6 +522,224 @@ position_pairwise_significance <- function(
     stop("`groups` is missing: ",
          paste(setdiff(group_columns, names(groups)), collapse = ", "))
   }
+  if (!all(vapply(comparisons[comparison_columns], is.numeric, logical(1)))) {
+    stop("`padj`, `xmin`, and `xmax` in `comparisons` must be numeric.")
+  }
+  if (!all(vapply(groups[group_columns], is.numeric, logical(1)))) {
+    stop("`x` and `y_max` in `groups` must be numeric.")
+  }
+  if (any(!is.finite(as.matrix(comparisons[comparison_columns])))) {
+    stop("`padj`, `xmin`, and `xmax` in `comparisons` must be finite.")
+  }
+  if (any(!is.finite(as.matrix(groups[group_columns])))) {
+    stop("`x` and `y_max` in `groups` must be finite.")
+  }
+  if (any(comparisons$xmin > comparisons$xmax)) {
+    stop("Every `xmin` must be less than or equal to its `xmax`.")
+  }
+  facet_scales <- match.arg(facet_scales)
+
+  if (!is.null(facet)) {
+    if (!is.character(facet) || length(facet) != 1L || is.na(facet)) {
+      stop("`facet` must be NULL or one column name.")
+    }
+    if (!facet %in% names(comparisons)) {
+      stop("`comparisons` does not contain the facet column `", facet, "`.")
+    }
+    if (!facet %in% names(groups)) {
+      stop("`groups` does not contain the facet column `", facet, "`.")
+    }
+
+    observed_by_facet <- if (is.data.frame(observed_y)) {
+      if (!facet %in% names(observed_y)) {
+        stop("Faceted `observed_y` data does not contain `", facet, "`.")
+      }
+      y_column <- if (".observed_y" %in% names(observed_y)) {
+        ".observed_y"
+      } else if ("observed_y" %in% names(observed_y)) {
+        "observed_y"
+      } else {
+        candidates <- setdiff(
+          names(observed_y)[vapply(observed_y, is.numeric, logical(1))],
+          facet
+        )
+        if (length(candidates) != 1L) {
+          stop("Faceted `observed_y` must contain `.observed_y`, `observed_y`, ",
+               "or exactly one non-facet numeric column.")
+        }
+        candidates
+      }
+      split(observed_y[[y_column]], as.character(observed_y[[facet]]))
+    } else if (is.list(observed_y) && !is.null(names(observed_y))) {
+      observed_y
+    } else if (is.numeric(observed_y) && !is.null(names(observed_y))) {
+      split(unname(observed_y), names(observed_y))
+    } else {
+      stop("With `facet`, supply `observed_y` as a data frame containing the ",
+           "facet and response, a named list, or a numeric vector named by facet.")
+    }
+
+    facet_values <- unique(as.character(groups[[facet]]))
+    facet_values <- facet_values[!is.na(facet_values)]
+    if (!length(facet_values)) stop("No non-missing facet values were found.")
+    missing_observed <- facet_values[vapply(
+      facet_values,
+      function(facet_value) is.null(observed_by_facet[[facet_value]]),
+      logical(1)
+    )]
+    if (length(missing_observed)) {
+      stop("No `observed_y` values were supplied for facet(s): ",
+           paste(missing_observed, collapse = ", "), ".")
+    }
+
+    panel_argument <- function(x, facet_value, argument, allow_null = FALSE) {
+      if (is.null(x) && allow_null) return(NULL)
+      if (length(x) == 1L) return(unname(x))
+      if (!is.null(names(x)) && facet_value %in% names(x)) {
+        return(unname(x[[facet_value]]))
+      }
+      stop("`", argument, "` must have length one or be named by facet.")
+    }
+
+    ## Facets with a fixed y scale must be solved against one common axis
+    ## span. Temporary, non-overlapping x blocks let the ordinary packing
+    ## algorithm lay out every panel at once without treating brackets from
+    ## different panels as collisions.
+    if (facet_scales %in% c("fixed", "free_x")) {
+      common_argument <- function(x, argument, allow_null = FALSE) {
+        if (is.null(x) && allow_null) return(NULL)
+        values <- unname(x)
+        if (!length(values) || anyNA(values) ||
+            length(unique(values)) != 1L) {
+          stop("With a fixed y scale, `", argument,
+               "` must be one value (or identical values for every facet).")
+        }
+        values[[1L]]
+      }
+
+      common_panel_height <- common_argument(
+        panel_height_mm, "panel_height_mm"
+      )
+      common_y_min <- common_argument(y_min, "y_min", allow_null = TRUE)
+      temporary_groups <- groups
+      temporary_comparisons <- comparisons
+      x_values <- c(groups$x, comparisons$xmin, comparisons$xmax)
+      x_values <- x_values[is.finite(x_values)]
+      x_width <- if (length(x_values)) diff(range(x_values)) else 0
+      if (!is.finite(x_width) || x_width <= 0) x_width <- 1
+      shifts <- stats::setNames(
+        (seq_along(facet_values) - 1) * (2 * x_width + 2),
+        facet_values
+      )
+      group_shift <- unname(shifts[as.character(groups[[facet]])])
+      comparison_shift <- unname(
+        shifts[as.character(comparisons[[facet]])]
+      )
+      temporary_groups$x <- temporary_groups$x + group_shift
+      temporary_comparisons$xmin <- temporary_comparisons$xmin +
+        comparison_shift
+      temporary_comparisons$xmax <- temporary_comparisons$xmax +
+        comparison_shift
+
+      positioned <- position_pairwise_significance(
+        comparisons = temporary_comparisons,
+        groups = temporary_groups,
+        observed_y = unlist(observed_by_facet[facet_values], use.names = FALSE),
+        facet = NULL,
+        facet_scales = facet_scales,
+        annotation = annotation,
+        binarize_significance = binarize_significance,
+        q_digits = q_digits,
+        textsize = textsize,
+        lineheight = lineheight,
+        panel_height_mm = common_panel_height,
+        data_gap_mm = data_gap_mm,
+        bar_gap_mm = bar_gap_mm,
+        top_margin_mm = top_margin_mm,
+        y_min = common_y_min
+      )
+      positioned$xmin <- comparisons$xmin
+      positioned$xmax <- comparisons$xmax
+      positioned$group <- seq_len(nrow(positioned))
+
+      common_ylim <- attr(positioned, "ylim")
+      facet_limits <- data.frame(
+        y = rep(common_ylim, times = length(facet_values))
+      )
+      facet_limits[[facet]] <- rep(facet_values, each = 2L)
+      attr(positioned, "ylim") <- stats::setNames(
+        rep(list(common_ylim), length(facet_values)), facet_values
+      )
+      attr(positioned, "facet_limits") <- facet_limits
+      attr(positioned, "layout_settings") <- list(
+        facet = facet,
+        facet_scales = facet_scales,
+        panel_height_mm = panel_height_mm,
+        textsize = textsize,
+        binarize_significance = binarize_significance
+      )
+      return(positioned)
+    }
+
+    panel_results <- lapply(facet_values, function(facet_value) {
+      comparisons_i <- comparisons[
+        as.character(comparisons[[facet]]) == facet_value, , drop = FALSE
+      ]
+      groups_i <- groups[
+        as.character(groups[[facet]]) == facet_value, , drop = FALSE
+      ]
+      observed_i <- observed_by_facet[[facet_value]]
+      if (is.null(observed_i)) {
+        stop("No `observed_y` values were supplied for facet `", facet_value, "`.")
+      }
+      positioned_i <- position_pairwise_significance(
+        comparisons = comparisons_i,
+        groups = groups_i,
+        observed_y = observed_i,
+        facet = NULL,
+        facet_scales = facet_scales,
+        annotation = annotation,
+        binarize_significance = binarize_significance,
+        q_digits = q_digits,
+        textsize = textsize,
+        lineheight = lineheight,
+        panel_height_mm = panel_argument(
+          panel_height_mm, facet_value, "panel_height_mm"
+        ),
+        data_gap_mm = data_gap_mm,
+        bar_gap_mm = bar_gap_mm,
+        top_margin_mm = top_margin_mm,
+        y_min = panel_argument(y_min, facet_value, "y_min", allow_null = TRUE)
+      )
+      positioned_i[[facet]] <- rep(facet_value, nrow(positioned_i))
+      list(data = positioned_i, ylim = attr(positioned_i, "ylim"))
+    })
+
+    positioned <- do.call(rbind, lapply(panel_results, `[[`, "data"))
+    rownames(positioned) <- NULL
+    positioned$group <- seq_len(nrow(positioned))
+
+    facet_limits <- do.call(rbind, Map(function(result, facet_value) {
+      answer <- data.frame(y = result$ylim)
+      answer[[facet]] <- rep(facet_value, 2L)
+      answer
+    }, panel_results, facet_values))
+    rownames(facet_limits) <- NULL
+
+    attr(positioned, "ylim") <- stats::setNames(
+      lapply(panel_results, `[[`, "ylim"), facet_values
+    )
+    attr(positioned, "facet_limits") <- facet_limits
+    attr(positioned, "layout_settings") <- list(
+      facet = facet,
+      facet_scales = facet_scales,
+      panel_height_mm = panel_height_mm,
+      textsize = textsize,
+      binarize_significance = binarize_significance
+    )
+    return(positioned)
+  }
+
   if (!is.numeric(observed_y)) stop("`observed_y` must be numeric.")
   observed_y <- observed_y[is.finite(observed_y)]
   if (!length(observed_y)) stop("`observed_y` has no finite values.")
@@ -496,6 +909,9 @@ position_pairwise_significance <- function(
 #'   column in `data`.
 #' @param factor2 `NULL` for a one-factor design, or a length-one character
 #'   string naming the second grouping column.
+#' @param facet `NULL` for an un-faceted analysis, or a length-one character
+#'   string naming the facet column. Tests, multiplicity adjustment, and bar
+#'   positioning are performed independently within each facet.
 #' @param test Either one of `"t"`, `"wilcox"`, or `"auto"`, or a function.
 #'   `"t"` uses [stats::t.test()] (Welch's test unless changed through
 #'   `test_args`), and `"wilcox"` uses [stats::wilcox.test()]. A custom
@@ -536,6 +952,13 @@ position_pairwise_significance <- function(
 #' @param x_layout For a two-factor design, either `"dodge"` to place factor 2
 #'   within factor 1 or `"interaction"` to place every observed cell on a
 #'   separate discrete x position. Ignored for a one-factor design.
+#' @param facet_scales The scale behavior supplied to ggplot2 faceting:
+#'   `"fixed"`, `"free_y"`, `"free_x"`, or `"free"`. With fixed x scales
+#'   (`"fixed"` or `"free_y"`), x coordinates use global factor levels. With
+#'   free x scales, coordinates are recalculated within each facet. With free
+#'   y scales (`"free_y"` or `"free"`), bracket positions and y limits are
+#'   solved independently per facet. With fixed y scales, one common y range
+#'   is used so physical gaps remain consistent across panels.
 #' @param dodge_width Total dodge width used to calculate factor-2 centres.
 #'   Use the same value in [ggplot2::position_dodge()] and
 #'   [ggplot2::position_jitterdodge()].
@@ -548,7 +971,9 @@ position_pairwise_significance <- function(
 #' @param panel_height_mm Intended height, in millimetres, of the rendered
 #'   plotting panel. This is the panel containing the data, not the complete
 #'   figure including titles, axes, margins, or legends. It is required to
-#'   convert physical text sizes into y-axis data units.
+#'   convert physical text sizes into y-axis data units. For unequal-height
+#'   free-y facets, this may be a numeric vector named by facet. Fixed-y facets
+#'   require one value (or identical values for every facet).
 #' @param data_gap_mm Minimum physical gap, in millimetres, between the local
 #'   data maximum and the first bracket above it.
 #' @param bar_gap_mm Minimum physical gap, in millimetres, between the top of a
@@ -558,7 +983,9 @@ position_pairwise_significance <- function(
 #' @param y_min `NULL` to use the observed response minimum as the lower limit
 #'   for layout calculations, or a finite numeric value no greater than the
 #'   observed minimum. Supplying the intended plot minimum, commonly zero for
-#'   non-negative measurements, improves physical-size calibration.
+#'   non-negative measurements, improves physical-size calibration. For
+#'   free-y facets this may be a numeric vector named by facet; fixed-y facets
+#'   require a common value.
 #' @param make_layer Logical. If `TRUE`, create a [ggsignif::geom_signif()]
 #'   layer. If `FALSE`, calculate tests and positions without requiring
 #'   ggplot2 or ggsignif.
@@ -591,10 +1018,12 @@ position_pairwise_significance <- function(
 #' requested brackets cannot physically fit in `panel_height_mm`, the function
 #' stops and asks for a taller panel instead of silently allowing overlap.
 #'
-#' The layout assumes one panel, a continuous linear y scale, unpaired samples,
-#' and vertical significance brackets. For exact physical spacing, add the
-#' returned layer and use
-#' `coord_cartesian(ylim = result$ylim, expand = FALSE, clip = "off")`.
+#' The layout assumes a continuous linear y scale, unpaired samples, and
+#' vertical significance brackets. Without facets, use
+#' `coord_cartesian(ylim = result$ylim, expand = FALSE, clip = "off")`. With
+#' facets, the returned layer list includes invisible per-panel scale anchors;
+#' use `scale_y_continuous(expand = expansion(mult = c(0, 0)))` and do not set
+#' one global y limit.
 #'
 #' @return An object of class `compact_pairwise_signif`, which is a list with
 #'   the following components:
@@ -611,9 +1040,12 @@ position_pairwise_significance <- function(
 #'       automatic test-selection rule.}
 #'     \item{plot_data}{A copy of `data` with standardized `.signif_x`,
 #'       `.signif_y`, `.signif_fill`, and `.signif_group` columns.}
-#'     \item{layer}{A ggsignif layer, or `NULL` when `make_layer = FALSE` or no
-#'       comparison passes `alpha`.}
-#'     \item{ylim}{Recommended lower and upper y limits.}
+#'     \item{layer}{A ggsignif layer for an un-faceted result. For facets, a
+#'       list containing a scale-anchor layer and, when needed, the ggsignif
+#'       layer. It is `NULL` when `make_layer = FALSE`.}
+#'     \item{ylim}{A two-value range without facets, or a named list of ranges
+#'       with facets.}
+#'     \item{facet_limits}{Panel-specific scale limits in long form, or `NULL`.}
 #'     \item{method}{The test family actually used.}
 #'     \item{settings}{Selected layout and physical-size settings.}
 #'   }
@@ -658,6 +1090,7 @@ compact_pairwise_signif <- function(
     response,
     factor1,
     factor2 = NULL,
+    facet = NULL,
     test = c("t", "wilcox", "auto"),
     test_args = list(),
     normality_alpha = 0.05,
@@ -669,6 +1102,7 @@ compact_pairwise_signif <- function(
     binarize_significance = FALSE,
     q_digits = 2L,
     x_layout = c("dodge", "interaction"),
+    facet_scales = c("free_y", "fixed", "free", "free_x"),
     dodge_width = 0.75,
     interaction_sep = "_",
     textsize = 3.88,
@@ -691,6 +1125,7 @@ compact_pairwise_signif <- function(
     response = response,
     factor1 = factor1,
     factor2 = factor2,
+    facet = facet,
     test = test,
     test_args = test_args,
     normality_alpha = normality_alpha,
@@ -699,12 +1134,15 @@ compact_pairwise_signif <- function(
     p_adjust_method = p_adjust_method,
     alpha = alpha,
     x_layout = x_layout,
+    facet_scales = facet_scales,
     dodge_width = dodge_width,
     interaction_sep = interaction_sep
   )
 
   positioned_comparisons <- position_pairwise_significance(
     comparisons = comparison_result,
+    facet = facet,
+    facet_scales = facet_scales,
     annotation = annotation,
     binarize_significance = binarize_significance,
     q_digits = q_digits,
@@ -717,43 +1155,60 @@ compact_pairwise_signif <- function(
     y_min = y_min
   )
   ylim <- attr(positioned_comparisons, "ylim")
+  facet_limits <- attr(positioned_comparisons, "facet_limits")
   layout_settings <- attr(positioned_comparisons, "layout_settings")
 
   layer <- NULL
-  if (make_layer && nrow(positioned_comparisons) > 0L) {
-    if (!requireNamespace("ggplot2", quietly = TRUE) ||
-        !requireNamespace("ggsignif", quietly = TRUE)) {
-      stop("Install `ggplot2` and `ggsignif`, or call with `make_layer = FALSE`.")
+  if (make_layer && (!is.null(facet) || nrow(positioned_comparisons) > 0L)) {
+    if (!requireNamespace("ggplot2", quietly = TRUE)) {
+      stop("Install `ggplot2`, or call with `make_layer = FALSE`.")
     }
-    layer_defaults <- list(
-      mapping = ggplot2::aes(
-        xmin = xmin, xmax = xmax, annotations = annotation,
-        y_position = y_position, group = group
-      ),
-      data = positioned_comparisons,
-      manual = TRUE,
-      inherit.aes = FALSE,
-      margin_top = 0,
-      step_increase = 0,
-      tip_length = 0,
-      textsize = textsize,
-      vjust = 0
-    )
-    layer <- withCallingHandlers(
-      do.call(
-        ggsignif::geom_signif,
-        utils::modifyList(layer_defaults, geom_args)
-      ),
-      warning = function(w) {
-        msg <- conditionMessage(w)
-        expected <- grepl("Ignoring unknown aesthetics", msg, fixed = TRUE) &&
-          all(vapply(
-            c("xmin", "xmax", "annotations", "y_position"),
-            grepl, logical(1), x = msg, fixed = TRUE
-          ))
-        if (expected) invokeRestart("muffleWarning")
+    significance_layer <- NULL
+    if (nrow(positioned_comparisons) > 0L) {
+      if (!requireNamespace("ggsignif", quietly = TRUE)) {
+        stop("Install `ggsignif`, or call with `make_layer = FALSE`.")
       }
-    )
+      layer_defaults <- list(
+        mapping = ggplot2::aes(
+          xmin = xmin, xmax = xmax, annotations = annotation,
+          y_position = y_position, group = group
+        ),
+        data = positioned_comparisons,
+        manual = TRUE,
+        inherit.aes = FALSE,
+        margin_top = 0,
+        step_increase = 0,
+        tip_length = 0,
+        textsize = textsize,
+        vjust = 0
+      )
+      significance_layer <- withCallingHandlers(
+        do.call(
+          ggsignif::geom_signif,
+          utils::modifyList(layer_defaults, geom_args)
+        ),
+        warning = function(w) {
+          msg <- conditionMessage(w)
+          expected <- grepl("Ignoring unknown aesthetics", msg, fixed = TRUE) &&
+            all(vapply(
+              c("xmin", "xmax", "annotations", "y_position"),
+              grepl, logical(1), x = msg, fixed = TRUE
+            ))
+          if (expected) invokeRestart("muffleWarning")
+        }
+      )
+    }
+
+    if (is.null(facet)) {
+      layer <- significance_layer
+    } else {
+      scale_anchor_layer <- ggplot2::geom_blank(
+        mapping = ggplot2::aes(y = y),
+        data = facet_limits,
+        inherit.aes = FALSE
+      )
+      layer <- Filter(Negate(is.null), list(scale_anchor_layer, significance_layer))
+    }
   }
 
   out <- list(
@@ -764,8 +1219,9 @@ compact_pairwise_signif <- function(
     plot_data = comparison_result$plot_data,
     layer = layer,
     ylim = ylim,
+    facet_limits = facet_limits,
     method = comparison_result$method,
-    settings = c(comparison_result$settings, layout_settings)
+    settings = utils::modifyList(comparison_result$settings, layout_settings)
   )
   structure(out, class = "compact_pairwise_signif")
 }
@@ -797,5 +1253,5 @@ print.compact_pairwise_signif <- function(x, ...) {
 # notes without adding rlang as a required dependency.
 utils::globalVariables(c(
   ".signif_fill", ".signif_x", ".signif_y",
-  "annotation", "group", "xmax", "xmin", "y_position"
+  "annotation", "group", "xmax", "xmin", "y", "y_position"
 ))
