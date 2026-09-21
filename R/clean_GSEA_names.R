@@ -63,7 +63,7 @@ clean_GSEA_names <- function(
       "TNFA", "NFKB", "WNT", "TGF", "IL6", "JAK", "STAT3",
       "DNA", "G2M", "NOTCH", "PI3K", "AKT", "mTOR", "mTORC1",
       "E2F", "MYC", "V1", "V2", "p53", "UV", "IL2", "STAT5",
-      "KRAS", "DN", "SenMayo"
+      "KRAS", "DN", "SenMayo", "II", "III", "IV", "ISR"
     ),
     corrections = c(oxigen = "oxygen")
 ) {
