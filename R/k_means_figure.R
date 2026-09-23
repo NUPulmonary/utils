@@ -440,7 +440,7 @@ k_means_figure = function(dge,
   {
     #pare down to genes in the matrix
     custom_annotation_tmp = tibble::column_to_rownames(custom_annotation, var = annotation_join_column)
-    custom_annotation_tmp = custom_annotation[rownames(counts_mat), ]
+    custom_annotation_tmp = custom_annotation_tmp[rownames(counts_mat), ,drop = FALSE]
     cluster_annos = custom_annotation_tmp
   } else if(is.null(custom_annotation) && display_go_terms == FALSE)
   {
