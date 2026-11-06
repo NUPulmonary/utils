@@ -19,7 +19,8 @@
 #' @param exclude_morphology Whether to omit the six Cell/Nucleus morphology
 #'   measurements created by LoadInstanSeg; defaults to FALSE.
 #' @return List containing x (cells by features), obs (aligned batch metadata),
-#'   and constant_features (features dropped for having zero variance).
+#'   feature_ranges (per-feature minimum/maximum), and constant_features
+#'   (features dropped for having zero variance).
 #' @details Morphology matching accepts hyphens or underscores in feature names.
 #'   No feature categories are excluded unless requested by the caller.
 #'   Never applies arcsinh again. Stops on missing cells, features, batch labels,
@@ -74,8 +75,18 @@ prepare_cytovi_input <- function(expression, metadata, cells, batch_col,
   # Pool across samples; do not erase sample differences by centering each donor.
   if (scale_input) x <- scale(x)
   if (!all(is.finite(x))) stop("Scaling produced nonfinite measurements.")
+  # R doubles can be finite yet overflow when the training matrix becomes float32.
+  ranges <- apply(x, 2L, range)
+  if (any(abs(ranges) > 3.4028234663852886e38)) {
+    stop("Selected expression exceeds the finite float32 range; inspect scaling.")
+  }
+  feature_ranges <- data.frame(
+    feature = colnames(x), minimum = ranges[1L, ], maximum = ranges[2L, ],
+    row.names = NULL
+  )
   obs <- data.frame(cytovi_batch = batches, row.names = cells)
-  list(x = x, obs = obs, constant_features = constant_features)
+  list(x = x, obs = obs, constant_features = constant_features,
+       feature_ranges = feature_ranges)
 }
 
 #' Train CytoVI from a Seurat v5 RDS and save a new RDS with its latent embedding.
@@ -102,8 +113,16 @@ prepare_cytovi_input <- function(expression, metadata, cells, batch_col,
 #' @param exclude_morphology Whether to omit Cell/Nucleus Area, Circularity, and
 #'   Solidity from model input; defaults to FALSE. Excluded features remain in
 #'   the saved Seurat object.
+#' @param lr Optimizer learning rate, default 0.001 (CytoVI's default).
+#' @param matmul_precision PyTorch float32 matrix multiplication precision:
+#'   highest (default, full float32), high, or medium. The latter two can use
+#'   NVIDIA Tensor Cores; these are unrelated to Google TPU accelerators.
+#' @param gradient_clip_val Maximum gradient norm; default 0 disables clipping.
+#' @param detect_anomaly Enable slower autograd anomaly diagnostics, default FALSE.
 #' @return Invisibly, the updated Seurat object. Writes output_rds and, optionally,
 #'   model_dir. Initializes Python and trains a model in the current R process.
+#'   On training failure, writes output_rds.training-error.txt with runtime
+#'   information, feature ranges, and the available Python error/traceback.
 #' @details Requires a single exact layer containing every object cell; split
 #'   layers must be joined beforehand. Does not reconstruct marker expression or
 #'   change active identities. Stops before saving on invalid input, an existing
@@ -116,7 +135,9 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
                            accelerator = "auto", model_dir = NULL,
                            overwrite = FALSE, n_layers = 1L,
                            dropout_rate = 0.1, early_stopping = TRUE,
-                           exclude_morphology = FALSE) {
+                           exclude_morphology = FALSE, lr = 0.001,
+                           matmul_precision = "highest", gradient_clip_val = 0,
+                           detect_anomaly = FALSE) {
   for (value in list(n_latent, n_layers, max_epochs, batch_size)) {
     if (length(value) != 1L || !is.numeric(value) || !is.finite(value) ||
         value < 1 || value != floor(value)) {
@@ -134,6 +155,18 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   if (length(exclude_morphology) != 1L || !is.logical(exclude_morphology) ||
       is.na(exclude_morphology)) {
     stop("exclude_morphology must be TRUE or FALSE.")
+  }
+  if (length(lr) != 1L || !is.numeric(lr) || !is.finite(lr) || lr <= 0) {
+    stop("lr must be a finite positive number.")
+  }
+  matmul_precision <- match.arg(matmul_precision, c("highest", "high", "medium"))
+  if (length(gradient_clip_val) != 1L || !is.numeric(gradient_clip_val) ||
+      !is.finite(gradient_clip_val) || gradient_clip_val < 0) {
+    stop("gradient_clip_val must be a finite nonnegative number.")
+  }
+  if (length(detect_anomaly) != 1L || !is.logical(detect_anomaly) ||
+      is.na(detect_anomaly)) {
+    stop("detect_anomaly must be TRUE or FALSE.")
   }
   for (package in c("SeuratObject", "reticulate")) {
     if (!requireNamespace(package, quietly = TRUE)) {
@@ -181,23 +214,65 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   }
   anndata <- reticulate::import("anndata", convert = FALSE)
   np <- reticulate::import("numpy", convert = FALSE)
+  torch <- reticulate::import("torch", convert = FALSE)
+  sys <- reticulate::import("sys", convert = FALSE)
   scvi$settings$seed <- as.integer(seed)
+  torch$set_float32_matmul_precision(matmul_precision)
+  runtime <- list(
+    python = reticulate::py_to_r(sys$executable),
+    python_version = reticulate::py_to_r(sys$version),
+    scvi_version = reticulate::py_to_r(scvi$`__version__`),
+    scvi_location = reticulate::py_to_r(scvi$`__file__`),
+    torch_version = reticulate::py_to_r(torch$`__version__`),
+    torch_location = reticulate::py_to_r(torch$`__file__`),
+    cuda_available = reticulate::py_to_r(torch$cuda$is_available())
+  )
+  message("Python: ", runtime$python, "\n", runtime$python_version,
+          "\nscvi-tools ", runtime$scvi_version, ": ", runtime$scvi_location,
+          "\nPyTorch ", runtime$torch_version, ": ", runtime$torch_location,
+          "\nCUDA available: ", runtime$cuda_available,
+          "; float32 matmul precision: ", matmul_precision)
 
   # Explicit float32 C-order input avoids a read-only R-backed NumPy buffer.
   adata <- anndata$AnnData(
     X = np$array(input$x, dtype = "float32", order = "C"),
     obs = reticulate::r_to_py(input$obs)
   )
+  if (!isTRUE(reticulate::py_to_r(np$isfinite(adata$X)$all()))) {
+    stop("The Python float32 matrix contains NaN/Inf after conversion.")
+  }
   adata$var_names <- reticulate::r_to_py(as.list(colnames(input$x)))
   external$CYTOVI$setup_anndata(adata, batch_key = "cytovi_batch")
   model <- external$CYTOVI(
     adata, n_latent = as.integer(n_latent), n_layers = as.integer(n_layers),
     dropout_rate = as.numeric(dropout_rate), protein_likelihood = "normal"
   )
-  model$train(
-    max_epochs = as.integer(max_epochs), batch_size = as.integer(batch_size),
-    n_epochs_kl_warmup = as.integer(min(50L, max_epochs)),
-    early_stopping = early_stopping, accelerator = accelerator, devices = 1L
+  tryCatch(
+    model$train(
+      max_epochs = as.integer(max_epochs), batch_size = as.integer(batch_size),
+      n_epochs_kl_warmup = as.integer(min(50L, max_epochs)),
+      early_stopping = early_stopping, accelerator = accelerator, devices = 1L,
+      lr = as.numeric(lr), precision = "32-true",
+      gradient_clip_val = as.numeric(gradient_clip_val),
+      detect_anomaly = detect_anomaly
+    ),
+    error = function(error) {
+      # Capture Python's last error before calling any more Python functions.
+      python_error <- reticulate::py_last_error()
+      report <- c(
+        conditionMessage(error), "", "Runtime:", capture.output(print(runtime)),
+        "", "Input feature ranges:", capture.output(print(input$feature_ranges)),
+        "", "Python error:", capture.output(print(python_error))
+      )
+      report_path <- paste0(output_rds, ".training-error.txt")
+      tryCatch(
+        writeLines(report, report_path),
+        error = function(write_error) message("Could not save diagnostics: ",
+                                              conditionMessage(write_error))
+      )
+      message("Training failed; diagnostic report path: ", report_path)
+      stop(error)
+    }
   )
 
   embedding <- as.matrix(reticulate::py_to_r(model$get_latent_representation()))
@@ -222,6 +297,9 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
       n_latent = n_latent, max_epochs = max_epochs, batch_size = batch_size,
       n_layers = n_layers, dropout_rate = dropout_rate,
       early_stopping = early_stopping,
+      lr = lr, matmul_precision = matmul_precision, precision = "32-true",
+      gradient_clip_val = gradient_clip_val, detect_anomaly = detect_anomaly,
+      runtime = runtime, feature_ranges = input$feature_ranges,
       kl_warmup_epochs = min(50L, max_epochs), seed = seed,
       scvi_version = reticulate::py_to_r(scvi$`__version__`)
     )
