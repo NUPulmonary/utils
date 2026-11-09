@@ -89,6 +89,35 @@ prepare_cytovi_input <- function(expression, metadata, cells, batch_col,
        feature_ranges = feature_ranges)
 }
 
+#' Select a small diagnostic subset covering samples and feature extremes.
+#' @param x Prepared numeric cells-by-features matrix.
+#' @param batches Sample labels in the same cell order as x.
+#' @return Unique one-based row indices, including each feature's minimum and
+#'   maximum, one cell per sample, and up to 512 evenly spaced cells.
+#' @details Reads inputs without modifying them or consuming random numbers.
+cytovi_probe_rows <- function(x, batches) {
+  as.integer(unique(c(
+    round(seq(1L, nrow(x), length.out = min(512L, nrow(x)))),
+    match(unique(batches), batches),
+    apply(x, 2L, which.min), apply(x, 2L, which.max)
+  )))
+}
+
+#' Verify a returned Python matrix matches R values within float32 precision.
+#' @param expected Numeric matrix in the expected row and column order.
+#' @param actual Matrix copied back from the corresponding Python rows.
+#' @return NULL invisibly; stops on a shape, finiteness, or value mismatch.
+#' @details Ignores dimnames. Uses two float32 epsilons with a unit absolute
+#'   tolerance floor to accommodate ordinary double-to-float32 rounding only.
+check_cytovi_roundtrip <- function(expected, actual) {
+  actual <- as.matrix(actual)
+  if (!identical(dim(actual), dim(expected)) || !all(is.finite(actual)) ||
+      any(abs(actual - expected) > 2 * 2^-23 * pmax(1, abs(expected)))) {
+    stop("R/Python expression round-trip failed: dimensions or values changed.")
+  }
+  invisible(NULL)
+}
+
 #' Train CytoVI from a Seurat v5 RDS and save a new RDS with its latent embedding.
 #'
 #' @param input_rds Path to an existing Seurat RDS.
@@ -119,6 +148,12 @@ prepare_cytovi_input <- function(expression, metadata, cells, batch_col,
 #'   NVIDIA Tensor Cores; these are unrelated to Google TPU accelerators.
 #' @param gradient_clip_val Maximum gradient norm; default 0 disables clipping.
 #' @param detect_anomaly Enable slower autograd anomaly diagnostics, default FALSE.
+#' @param variance_activation Encoder variance activation, exp (default) or
+#'   softplus. Softplus avoids exponential overflow but changes the model's
+#'   variance parameterization; it does not clip or transform expression values.
+#' @param preflight_check Run a small CPU evaluation-mode forward pass before
+#'   training, default FALSE. Includes feature extremes and representatives of
+#'   every sample. Restores the model mode and PyTorch CPU random state afterward.
 #' @return Invisibly, the updated Seurat object. Writes output_rds and, optionally,
 #'   model_dir. Initializes Python and trains a model in the current R process.
 #'   On training failure, writes output_rds.training-error.txt with runtime
@@ -137,7 +172,8 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
                            dropout_rate = 0.1, early_stopping = TRUE,
                            exclude_morphology = FALSE, lr = 0.001,
                            matmul_precision = "highest", gradient_clip_val = 0,
-                           detect_anomaly = FALSE) {
+                           detect_anomaly = FALSE, variance_activation = "exp",
+                           preflight_check = FALSE) {
   for (value in list(n_latent, n_layers, max_epochs, batch_size)) {
     if (length(value) != 1L || !is.numeric(value) || !is.finite(value) ||
         value < 1 || value != floor(value)) {
@@ -167,6 +203,11 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   if (length(detect_anomaly) != 1L || !is.logical(detect_anomaly) ||
       is.na(detect_anomaly)) {
     stop("detect_anomaly must be TRUE or FALSE.")
+  }
+  variance_activation <- match.arg(variance_activation, c("exp", "softplus"))
+  if (length(preflight_check) != 1L || !is.logical(preflight_check) ||
+      is.na(preflight_check)) {
+    stop("preflight_check must be TRUE or FALSE.")
   }
   for (package in c("SeuratObject", "reticulate")) {
     if (!requireNamespace(package, quietly = TRUE)) {
@@ -241,28 +282,77 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   if (!isTRUE(reticulate::py_to_r(np$isfinite(adata$X)$all()))) {
     stop("The Python float32 matrix contains NaN/Inf after conversion.")
   }
+  probe_rows <- cytovi_probe_rows(input$x, input$obs$cytovi_batch)
+  probe_indices <- as.list(as.integer(probe_rows - 1L))
+  converted <- reticulate::py_to_r(np$take(adata$X, probe_indices, axis = 0L))
+  check_cytovi_roundtrip(input$x[probe_rows, , drop = FALSE], converted)
+  message("R/Python float32 round-trip passed for ", length(probe_rows),
+          " cells, including every sample and every feature's minimum/maximum.")
   adata$var_names <- reticulate::r_to_py(as.list(colnames(input$x)))
   external$CYTOVI$setup_anndata(adata, batch_key = "cytovi_batch")
+  variance_function <- if (variance_activation == "softplus") {
+    torch$nn$functional$softplus
+  } else {
+    torch$exp
+  }
   model <- external$CYTOVI(
     adata, n_latent = as.integer(n_latent), n_layers = as.integer(n_layers),
-    dropout_rate = as.numeric(dropout_rate), protein_likelihood = "normal"
+    dropout_rate = as.numeric(dropout_rate), protein_likelihood = "normal",
+    log_variational = FALSE, var_activation = variance_function
   )
+  stage <- "training"
+  saved_python_error <- NULL
   tryCatch(
-    model$train(
-      max_epochs = as.integer(max_epochs), batch_size = as.integer(batch_size),
-      n_epochs_kl_warmup = as.integer(min(50L, max_epochs)),
-      early_stopping = early_stopping, accelerator = accelerator, devices = 1L,
-      lr = as.numeric(lr), precision = "32-true",
-      gradient_clip_val = as.numeric(gradient_clip_val),
-      detect_anomaly = detect_anomaly
-    ),
+    {
+      if (preflight_check) {
+        stage <- "CPU forward-pass preflight (before training)"
+        random_state <- torch$get_rng_state()
+        previous_mode <- reticulate::py_to_r(model$module$training)
+        tryCatch(
+          {
+            model$module$eval()
+            score <- reticulate::import_builtins(convert = FALSE)$float(
+              model$get_elbo(indices = probe_indices, batch_size = as.integer(batch_size))
+            )
+            if (!is.finite(reticulate::py_to_r(score))) {
+              stop("Initial evaluation-mode forward pass produced a nonfinite ELBO.")
+            }
+            message("CPU forward-pass preflight passed for ", length(probe_rows), " cells.")
+          },
+          error = function(error) {
+            saved_python_error <<- reticulate::py_last_error()
+            stop(error)
+          },
+          finally = {
+            torch$set_rng_state(random_state)
+            model$module$train(mode = previous_mode)
+          }
+        )
+      }
+      stage <- "training / validation"
+      model$train(
+        max_epochs = as.integer(max_epochs), batch_size = as.integer(batch_size),
+        n_epochs_kl_warmup = as.integer(min(50L, max_epochs)),
+        early_stopping = as.logical(early_stopping),
+        accelerator = accelerator, devices = 1L,
+        lr = as.numeric(lr), precision = "32-true",
+        gradient_clip_val = as.numeric(gradient_clip_val),
+        detect_anomaly = detect_anomaly
+      )
+    },
     error = function(error) {
       # Capture Python's last error before calling any more Python functions.
-      python_error <- reticulate::py_last_error()
+      python_error <- if (is.null(saved_python_error)) {
+        reticulate::py_last_error()
+      } else {
+        saved_python_error
+      }
       report <- c(
-        conditionMessage(error), "", "Runtime:", capture.output(print(runtime)),
+        paste("Failure stage:", stage), conditionMessage(error),
+        paste("Encoder variance activation:", variance_activation),
+        "", "Runtime:", capture.output(print(runtime)),
         "", "Input feature ranges:", capture.output(print(input$feature_ranges)),
-        "", "Python error:", capture.output(print(python_error))
+        "", "Python error:", python_error$message, python_error$traceback
       )
       report_path <- paste0(output_rds, ".training-error.txt")
       tryCatch(
@@ -299,6 +389,7 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
       early_stopping = early_stopping,
       lr = lr, matmul_precision = matmul_precision, precision = "32-true",
       gradient_clip_val = gradient_clip_val, detect_anomaly = detect_anomaly,
+      variance_activation = variance_activation, preflight_check = preflight_check,
       runtime = runtime, feature_ranges = input$feature_ranges,
       kl_warmup_epochs = min(50L, max_epochs), seed = seed,
       scvi_version = reticulate::py_to_r(scvi$`__version__`)
