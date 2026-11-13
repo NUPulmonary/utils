@@ -134,7 +134,9 @@ check_cytovi_roundtrip <- function(expected, actual) {
 #' @param seed Random seed for scvi-tools, default 42. Hardware may affect results.
 #' @param accelerator Lightning accelerator, e.g. auto, cpu, gpu, or mps.
 #' @param model_dir Optional new directory for a reusable model plus AnnData.
-#' @param overwrite Whether an existing output RDS may be replaced, default FALSE.
+#' @param overwrite Whether to replace an existing output RDS and/or a subobject
+#'   named CytoVI, default FALSE. Input and output RDS paths must still differ.
+#'   Does not permit overwriting an existing model_dir.
 #' @param n_layers Hidden layers in the encoder and decoder, default 1.
 #' @param dropout_rate Neural-network dropout probability in [0, 1), default 0.1.
 #' @param early_stopping Whether validation performance can stop training before
@@ -172,7 +174,9 @@ check_cytovi_roundtrip <- function(expected, actual) {
 #' @details Requires a single exact layer containing every object cell; split
 #'   layers must be joined beforehand. Does not reconstruct marker expression or
 #'   change active identities. Stops before saving on invalid input, an existing
-#'   CytoVI subobject, invalid latent coordinates, or dependency/training errors.
+#'   CytoVI subobject unless overwrite is TRUE, invalid latent coordinates, or
+#'   dependency/training errors. Existing downstream graphs, UMAPs, and clusters
+#'   are not recomputed when replacing the CytoVI reduction.
 run_cytovi_rds <- function(input_rds, output_rds, batch_col,
                            assay = "CODEX", layer = "scale.data",
                            features = NULL, exclude_features = character(),
@@ -187,6 +191,9 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
                            preflight_check = FALSE,
                            adversarial_classifier = NULL,
                            scale_adversarial_loss = "auto") {
+  if (length(overwrite) != 1L || !is.logical(overwrite) || is.na(overwrite)) {
+    stop("overwrite must be TRUE or FALSE.")
+  }
   for (value in list(n_latent, n_layers, max_epochs, batch_size)) {
     if (length(value) != 1L || !is.numeric(value) || !is.finite(value) ||
         value < 1 || value != floor(value)) {
@@ -264,14 +271,18 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   if (normalizePath(input_rds) == output_path) {
     stop("input_rds and output_rds must be different files.")
   }
-  if (file.exists(output_rds) && !overwrite) stop("Output RDS already exists.")
+  if (file.exists(output_rds) && !overwrite) {
+    stop("Output RDS already exists; set overwrite = TRUE to replace it.")
+  }
   if (!is.null(model_dir) && file.exists(model_dir)) {
     stop("model_dir must be a new directory.")
   }
   object <- readRDS(input_rds)
   if (!inherits(object, "Seurat")) stop("Input RDS must contain a Seurat object.")
   if (!assay %in% SeuratObject::Assays(object)) stop("Assay not found: ", assay)
-  if ("CytoVI" %in% names(object)) stop("A subobject named CytoVI already exists.")
+  if ("CytoVI" %in% names(object) && !overwrite) {
+    stop("A subobject named CytoVI already exists; set overwrite = TRUE to replace it.")
+  }
   available_layers <- SeuratObject::Layers(object[[assay]], search = NA)
   if (!layer %in% available_layers) {
     stop("Exact layer '", layer, "' not found. Available: ",
@@ -427,6 +438,10 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   rownames(embedding) <- returned_cells
   embedding <- embedding[colnames(object), , drop = FALSE]
   colnames(embedding) <- paste0("CytoVI_", seq_len(ncol(embedding)))
+  # Remove the previous named subobject only after replacement coordinates pass
+  # validation. This also allows replacement when the old subobject has another
+  # Seurat subobject class. Disk files are written only after the new fit succeeds.
+  if ("CytoVI" %in% names(object)) object[["CytoVI"]] <- NULL
   object[["CytoVI"]] <- SeuratObject::CreateDimReducObject(
     embeddings = embedding, assay = assay, key = "CytoVI_",
     misc = list(
