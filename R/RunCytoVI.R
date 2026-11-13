@@ -146,7 +146,9 @@ check_cytovi_roundtrip <- function(expected, actual) {
 #' @param matmul_precision PyTorch float32 matrix multiplication precision:
 #'   highest (default, full float32), high, or medium. The latter two can use
 #'   NVIDIA Tensor Cores; these are unrelated to Google TPU accelerators.
-#' @param gradient_clip_val Maximum gradient norm; default 0 disables clipping.
+#' @param gradient_clip_val Compatibility argument, default 0. CytoVI's manual
+#'   optimization does not support Trainer-level gradient clipping. Positive
+#'   values warn and are ignored; this wrapper does not perform clipping.
 #' @param detect_anomaly Enable slower autograd anomaly diagnostics, default FALSE.
 #' @param variance_activation Encoder variance activation, exp (default) or
 #'   softplus. Softplus avoids exponential overflow but changes the model's
@@ -154,6 +156,15 @@ check_cytovi_roundtrip <- function(expected, actual) {
 #' @param preflight_check Run a small CPU evaluation-mode forward pass before
 #'   training, default FALSE. Includes feature extremes and representatives of
 #'   every sample. Restores the model mode and PyTorch CPU random state afterward.
+#' @param adversarial_classifier Enable an adversarial classifier that discourages
+#'   encoding the sample labels in batch_col. TRUE enables it, FALSE disables it,
+#'   and NULL (default) delegates the decision to CytoVI (normally enabled only
+#'   when missing proteins are detected). Requires model retraining to change.
+#' @param scale_adversarial_loss Adversarial loss weight: "auto" (default) follows
+#'   the inverse KL warmup, decaying from 1 toward 0, or a finite nonnegative
+#'   number keeps a fixed weight throughout training. Only has an effect when
+#'   the adversarial classifier is enabled. Larger weights can remove biological
+#'   differences associated with samples as well as technical differences.
 #' @return Invisibly, the updated Seurat object. Writes output_rds and, optionally,
 #'   model_dir. Initializes Python and trains a model in the current R process.
 #'   On training failure, writes output_rds.training-error.txt with runtime
@@ -173,7 +184,9 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
                            exclude_morphology = FALSE, lr = 0.001,
                            matmul_precision = "highest", gradient_clip_val = 0,
                            detect_anomaly = FALSE, variance_activation = "exp",
-                           preflight_check = FALSE) {
+                           preflight_check = FALSE,
+                           adversarial_classifier = NULL,
+                           scale_adversarial_loss = "auto") {
   for (value in list(n_latent, n_layers, max_epochs, batch_size)) {
     if (length(value) != 1L || !is.numeric(value) || !is.finite(value) ||
         value < 1 || value != floor(value)) {
@@ -200,6 +213,14 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
       !is.finite(gradient_clip_val) || gradient_clip_val < 0) {
     stop("gradient_clip_val must be a finite nonnegative number.")
   }
+  if (gradient_clip_val > 0) {
+    warning(
+      "CytoVI uses manual optimization; gradient_clip_val is ignored. ",
+      "Continuing without gradient clipping. Remove this argument from your call.",
+      call. = FALSE
+    )
+    gradient_clip_val <- 0
+  }
   if (length(detect_anomaly) != 1L || !is.logical(detect_anomaly) ||
       is.na(detect_anomaly)) {
     stop("detect_anomaly must be TRUE or FALSE.")
@@ -208,6 +229,25 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
   if (length(preflight_check) != 1L || !is.logical(preflight_check) ||
       is.na(preflight_check)) {
     stop("preflight_check must be TRUE or FALSE.")
+  }
+  if (!is.null(adversarial_classifier) &&
+      (length(adversarial_classifier) != 1L ||
+       !is.logical(adversarial_classifier) || is.na(adversarial_classifier))) {
+    stop("adversarial_classifier must be NULL, TRUE, or FALSE.")
+  }
+  if (!identical(scale_adversarial_loss, "auto")) {
+    if (length(scale_adversarial_loss) != 1L ||
+        !is.numeric(scale_adversarial_loss) ||
+        !is.finite(scale_adversarial_loss) || scale_adversarial_loss < 0) {
+      stop("scale_adversarial_loss must be 'auto' or a finite nonnegative number.")
+    }
+    # Preserve floating-point weights across reticulate even when supplied as 1L.
+    scale_adversarial_loss <- as.numeric(scale_adversarial_loss)
+  }
+  adversarial_mode <- if (is.null(adversarial_classifier)) {
+    "CytoVI default (NULL)"
+  } else {
+    as.character(adversarial_classifier)
   }
   for (package in c("SeuratObject", "reticulate")) {
     if (!requireNamespace(package, quietly = TRUE)) {
@@ -330,13 +370,21 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
         )
       }
       stage <- "training / validation"
+      message("Adversarial classifier: ", adversarial_mode,
+              "; adversarial loss weight: ", scale_adversarial_loss)
       model$train(
         max_epochs = as.integer(max_epochs), batch_size = as.integer(batch_size),
         n_epochs_kl_warmup = as.integer(min(50L, max_epochs)),
         early_stopping = as.logical(early_stopping),
         accelerator = accelerator, devices = 1L,
         lr = as.numeric(lr), precision = "32-true",
-        gradient_clip_val = as.numeric(gradient_clip_val),
+        adversarial_classifier = adversarial_classifier,
+        # Loss scaling belongs to the training plan, not the Lightning Trainer.
+        plan_kwargs = reticulate::dict(
+          scale_adversarial_loss = scale_adversarial_loss
+        ),
+        # CytoVI's training plan manages optimizer steps itself. Lightning's
+        # Trainer-level clipping is incompatible with that manual optimization.
         detect_anomaly = detect_anomaly
       )
     },
@@ -350,6 +398,8 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
       report <- c(
         paste("Failure stage:", stage), conditionMessage(error),
         paste("Encoder variance activation:", variance_activation),
+        paste("Adversarial classifier:", adversarial_mode),
+        paste("Adversarial loss weight:", scale_adversarial_loss),
         "", "Runtime:", capture.output(print(runtime)),
         "", "Input feature ranges:", capture.output(print(input$feature_ranges)),
         "", "Python error:", python_error$message, python_error$traceback
@@ -390,6 +440,8 @@ run_cytovi_rds <- function(input_rds, output_rds, batch_col,
       lr = lr, matmul_precision = matmul_precision, precision = "32-true",
       gradient_clip_val = gradient_clip_val, detect_anomaly = detect_anomaly,
       variance_activation = variance_activation, preflight_check = preflight_check,
+      adversarial_classifier = adversarial_classifier,
+      scale_adversarial_loss = scale_adversarial_loss,
       runtime = runtime, feature_ranges = input$feature_ranges,
       kl_warmup_epochs = min(50L, max_epochs), seed = seed,
       scvi_version = reticulate::py_to_r(scvi$`__version__`)
