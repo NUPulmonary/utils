@@ -18,6 +18,7 @@
 #' @param cores cores to run in parallel
 #' @param fit_type to control dispersion fitting
 #' @param genome_prefix regular expression of genome prefixe(s) on gene names for removal and better binding downstream
+#' @param custom_annotation (optional) a pre-built gene conversion with external_gene_name, ensembl_gene_id, and entrezgene_id
 #' @import Seurat DESeq2 biomaRt future BiocParallel tibble
 #' @return A list of DESeq2 dge objects. All relevant CSVs, PDFs of plots, and RDS files are saved to the directory specified.
 #' @export
@@ -37,7 +38,8 @@ pseudobulk_DEA = function(object,
                    cores = 1,
                    fit_type = "parametric",
                    genome_prefix = NA, 
-                   cell_mappings = NULL) 
+                   cell_mappings = NULL,
+                   custom_annotation = NULL) 
 {
   
   if(!("Seurat" %in% .packages()))
@@ -82,9 +84,15 @@ pseudobulk_DEA = function(object,
    
    sort_direction = match.arg(sort_direction)
    
-   #make mart for conversion
-   mart = useMart("ensembl", paste0(organism, "_gene_ensembl"))
-   conv = getBM(attributes = c("ensembl_gene_id", "entrezgene_id", "external_gene_name"), mart = mart)
+   if(is.null(custom_annotation))
+   {
+     #make mart for conversion
+     mart = useEnsembl(
+       biomart = "genes",
+       dataset = paste0(organism, "_gene_ensembl"),
+     )
+     conv = getBM(attributes = c("ensembl_gene_id", "entrezgene_id", "external_gene_name"), mart = mart)
+   }
    
    #change metadata to match seurat standards
    object@meta.data[, sample_factor] = gsub("_", "-", object@meta.data[, sample_factor])
@@ -149,6 +157,35 @@ pseudobulk_DEA = function(object,
      {
        return(NULL)
      }
+     
+     # Check replication after filtering, using the actual fitted design.
+     model_matrix <- model.matrix(
+       design,
+       data = as.data.frame(SummarizedExperiment::colData(des))
+     )
+     
+     if (nrow(model_matrix) <= ncol(model_matrix)) {
+       group_counts <- table(cur_md[[comp_col]])
+       
+       warning(
+         sprintf(
+           "Skipping %s: %d samples, %d coefficients; retained samples: %s",
+           cell,
+           nrow(model_matrix),
+           ncol(model_matrix),
+           paste(
+             names(group_counts),
+             as.integer(group_counts),
+             sep = "=",
+             collapse = ", "
+           )
+         ),
+         call. = FALSE
+       )
+       return(NULL)
+     }
+     
+     #if all tests pass, continue
      dge = DESeq(des, parallel = T, fitType = fit_type)
      
      #output DGE. Safe for symbols.
